@@ -1,0 +1,25 @@
+#!/bin/bash
+PHP="/usr/bin/php"
+DIR="/server/web/cryptotrade/daemon"
+PID=$DIR"/run/ctdaemon.pid"
+set -e
+
+test -x $PHP || exit 0
+
+case "$1" in
+ 'start')
+    $PHP -f $DIR"/ctdaemon.php" && sleep 2;;
+ 'stop')
+   #start-stop-daemon --stop --pidfile $PID
+   kill -s SIGTERM $(cat $PID)
+   while kill -0 $(cat $PID) 2>/dev/null; do sleep 3; done;
+   rm $PID;;
+ 'restart')
+   kill -s SIGTERM $(cat $PID)
+   while kill -0 $(cat $PID) 2>/dev/null; do sleep 3; done;
+   rm $PID
+  $PHP -f $DIR"/ctdaemon.php";;
+ 'status')
+   $PHP -f $DIR"/check_status.php";;
+esac
+exit 0
