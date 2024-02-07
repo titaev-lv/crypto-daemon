@@ -7,6 +7,7 @@ class KuCoin implements ExchangeInterface {
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
+    private $websoket_conn_id = '';
     
     private $account_id = 0;
     private $api_key = '';
@@ -751,8 +752,26 @@ class KuCoin implements ExchangeInterface {
 
                     $client = new \WebSocket\Client($options['uri'], $options);
                     if($client) {
-                        Log::systemLog('debug', 'Child Order Book proc='. getmypid().' Connect to exchange is true');
-                        return $client;
+                        try {
+                            $receive = $client->receive();
+                            $r = json_decode($receive, JSON_OBJECT_AS_ARRAY);
+                            if(isset($r['id'])) {
+                                $this->websoket_conn_id = $r['id'];
+                            }
+                            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' Connect to exchange KuCoin is true');
+                            return $client;
+                        }
+                        catch (\WebSocket\TimeoutException $e) {
+                            $src = '';
+                            switch($type) {
+                                case 'orderbook': 
+                                    $src = 'Order Book';
+                                    break;
+                                default:
+                                    $src = '';
+                            }
+                            Log::systemLog('error', 'ERROR CONNECT to KuCoin exchange proc='. getmypid().'',$src);
+                        }
                     }
                     return false;
                 }

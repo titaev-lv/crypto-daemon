@@ -35,6 +35,9 @@ class ctdaemon {
     //Timer update Traders
     public $timer_update_traders = 5*1E6; // (5sec)
     public $timer_update_traders_ts = 0;
+    //Timer update TradeWorkers
+    public $timer_update_trade_workers = 5*1E6; // (5sec)
+    public $timer_update_trade_workers_ts = 0;
     
     public function isDaemonActive($pid_file) {
         if(is_file($pid_file)) {
@@ -117,6 +120,9 @@ class ctdaemon {
                 case 'ctd_order_trans_monitor':
                     $this->runProcOrderTransMonitor();
                     break;
+                case 'ctd_trade_worker':
+                    $this->runProcTradeWorker();
+                    break;
                 default:
                    Log::systemLog('error',"Filed create process pid=".getmypid(). ' Error run method for '.$type, "New Process"); 
             }
@@ -160,15 +166,36 @@ class ctdaemon {
             $tasks_arr = array();
             $proc_not_response_arr = array();
             
+            /**Tasks array from DB. Include SPOT and FEATURES active trade pairs
+             * array(
+             *     [EXCHANGE_ID]
+             *         ['spot']
+             *             [PAIR_ID]
+             *             [PAIR_ID]
+             *         ['features']
+             *             [PAIR_ID]
+             *             [PAIR_ID]
+             *     ................
+             * )
+             */
             $tasks_arr = $this->getActiveExchangePairOrderBook();
-
             //Log::systemLog('debug', 'TASKS SUBSCRIBE LIST='. json_encode($tasks_arr));
+            
+            /** For every exchange will can have 2 processes (spot and feature market)
+             *  Step 1 - Find active process for every exchange and every market.   
+             *           Check activity process. If process is not active, add to array $proc_not_response_arr, mark it.
+             *  Step 2 - Create new process, if not exists or not respond
+             *  Step 3 - Send array pairs to Exchange's process for receive order book if CRC is different
+             *  Step 4 - Kill excess processes
+             *  Step 5 - Destroy processes not response
+             */
             if($tasks_arr !== false && !empty($tasks_arr)) {
                 ///------ For every exchange  
                 foreach ($tasks_arr as $key=>$tr) {
                     //---- For every market
                     foreach ($markets as $market) {
                         //search active children process
+                        //Step 1
                         $exchange_market_exist_flag = false;
                         $proc_not_response = false;
                         if(!empty($this->proc)) {
@@ -185,6 +212,7 @@ class ctdaemon {
                             }
                         }
                         //Create new child process if he is not exist
+                        //Step 2
                         if(!$exchange_market_exist_flag && isset($tr[$market])) {
                             $DB->close();
                             $msg = array('exchange_id'=>$key,'market'=>$market);
@@ -207,10 +235,12 @@ class ctdaemon {
                         //Log::systemLog('debug', 'OB PROC ='. json_encode($this->proc));
                         //Log::systemLog('debug', 'OB TREE PROC ='. json_encode($this->proc_tree));
                         
-                        //Send to Exchange process array pair for receive order book
+                        //Send array pairs to Exchange's process for receive order book
+                        //Step 3
                         foreach ($this->proc as $kproc=>$proc) {
                             if($proc['exchange_id'] === $key && $proc['market'] == $market) {
                                 if(isset($tr[$market])) {
+                                    //Calculate CRC summ for 
                                     $subscribe_crc = crc32(json_encode($tr[$market]));
                                     if(!isset($proc['subscribe_crc']) || $proc['subscribe_crc'] !== $subscribe_crc) {
                                         $this->proc[$kproc]['subscribe'] = $tr[$market];
@@ -228,6 +258,7 @@ class ctdaemon {
                     }
                 }
             }
+            //Step 4. Kill excess processes
             if(!empty($this->proc)) {   
                 //Destroy excess processes
                 foreach($this->proc as $k=>$proc) {
@@ -259,6 +290,7 @@ class ctdaemon {
                     }
                 }
             }  
+            //Step 5
             //Destroy processes not response
             if(!empty($proc_not_response_arr)) {
                 foreach ($proc_not_response_arr as $pkill) {
@@ -301,7 +333,7 @@ class ctdaemon {
         do {
             $task_create_exchange = ServiceRAM::read('create_exchange_orderbook');
         }
-        while($task_create_exchange === false);
+        while($task_create_exchange === false || empty($task_create_exchange));
         Log::systemLog('debug', 'Process "Exchange Order Book" pid='. getmypid().' received = '.json_encode($task_create_exchange), "Order Book");
         //Use only newer messege 
         $task = $task_create_exchange[0];
@@ -321,7 +353,9 @@ class ctdaemon {
                 do {
                     sleep(3);
                     $ws = $exchange->webSocketConnect('orderbook');
-                    Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error create websocket connect', "Order Book");
+                    if(!$ws) {
+                        Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error create websocket connect', "Order Book");
+                    }
                 }
                 while(!$ws);
             }
@@ -662,24 +696,47 @@ class ctdaemon {
                 return false;
             }
             //Log::systemLog('debug', json_encode($trade_list));
-            $proc_not_response_arr = array();
+            
+            /** Manage Trader's processes
+             *  Step 1 - Find active Trader's process
+             *           Check activity process. If process is not active, kill it.
+             *  Step 2 - Create new process, if not exists or not respond
+             *  Step 3 - Send array pairs to Exchange's process for receive order book if CRC is different
+             *  Step 4 - Kill excess processes
+             */
+
             if($trade_list !== false && !empty($trade_list)) {
                 foreach ($trade_list as $tr) {
+                    // Step 1
                     $trader_exist_flag = false;
-                    $proc_not_response = false;
                     if(!empty($this->proc)) {
                         foreach ($this->proc as $k=>$proc) {
                             if($proc['trade_id'] === $tr['ID'] && $proc['pid'] > 0) {
                                 $trader_exist_flag = true;
                                 //Check response
                                 if((microtime(true)*1E6 - $proc['timestamp'])*1E-6 > 9) {
-                                    $proc_not_response = true;
-                                    $proc_not_response_arr[] = $proc['pid'];
+                                    $trader_exist_flag = false;
                                     Log::systemLog('error', 'Proc='.$proc['pid'].' Traader NOT RESPONSE more 9 seconds.', "Trade Monitor");
+                                    $kill = posix_kill($this->proc[$k], SIGTERM);
+                                    unset($this->proc[$k]);
+                                    if(!empty($this->proc_tree)) {   
+                                        foreach($this->proc_tree as $k2=>$proc2) {
+                                            if($proc2['pid'] == $proc['pid']) {
+                                                unset($this->proc_tree[$k]);
+                                            }
+                                        }
+                                    }
+                                    if($kill) {
+                                        Log::systemLog('error', 'Proc Trader process ='.$proc['pid'].' is killed.' );
+                                    }
+                                    else {
+                                        Log::systemLog('error', 'ERROR kill Trader process ='.$proc['pid']);
+                                    }
                                 }
                             }    
                         }
                     }
+                    //Step 2
                     //Create new child process if he is not exist
                     if(!$trader_exist_flag) {
                         $DB->close();
@@ -694,6 +751,8 @@ class ctdaemon {
                             }
                         }
                         //Log::systemLog('debug', 'TRADER PROC ='. json_encode($this->proc));
+                        //
+                        //Step 3
                         //Send new process info about exchange and market type
                         ServiceRAM::write($tpid,'create_trader',$msg);
                         //Log::systemLog('debug', 'SEND to ServiceRAM command "create_trader" to process = '. $tpid.' from pid = '.getmypid().' '. json_encode($msg));
@@ -701,6 +760,7 @@ class ctdaemon {
                 }
             }
             
+            //Step 4
             if(!empty($this->proc)) {   
                 //Destroy excess processes
                 foreach($this->proc as $k=>$proc) {
@@ -732,32 +792,6 @@ class ctdaemon {
                     }
                 }
             }  
-            //Destroy processes not response
-            if(!empty($proc_not_response_arr)) {
-                foreach ($proc_not_response_arr as $pkill) {
-                    $kill = posix_kill($pkill, SIGTERM);
-                    if(!empty($this->proc)) {   
-                        foreach($this->proc as $k=>$proc) {
-                            if($proc['pid'] == $pkill) {
-                                unset($this->proc[$k]);
-                            }
-                        }
-                    }
-                    if(!empty($this->proc_tree)) {   
-                        foreach($this->proc_tree as $k=>$proc) {
-                            if($proc['pid'] == $pkill) {
-                                unset($this->proc_tree[$k]);
-                            }
-                        }
-                    }
-                    if($kill) {
-                        Log::systemLog('error', 'Proc Trader process ='.$pkill.' is killed.' );
-                    }
-                    else {
-                        Log::systemLog('error', 'ERROR kill Trader process ='.$pkill);
-                    }
-                }
-            }
         }
     }
 
@@ -796,7 +830,7 @@ class ctdaemon {
         do {
             $task_create_trader = ServiceRAM::read('create_trader');
         }
-        while($task_create_trader === false);
+        while($task_create_trader === false || empty($task_create_trader));
         Log::systemLog('debug', 'Process "Trader" pid='. getmypid().' received = '.json_encode($task_create_trader), "Trader");
         
         $trader->trader_id = $task_create_trader[0]['data']['trade_id'];
@@ -805,6 +839,9 @@ class ctdaemon {
             $this->timestamp = microtime(true)*1E6;           
             //Update tree
             $this->updateProcTree();
+            
+            
+            
             sleep(1);
         }
         
@@ -836,9 +873,227 @@ class ctdaemon {
         }
     }   
     private function runProcTradeWorkerMonitor() {
+        global $DB;
+        //Create DB connection
+        $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
+        
+        Log::systemLog('info',"Process type \"Trade Worker Monitor\" STARTED pid=".getmypid(), "Trade Worker Monitor");    
+        
+        while(1) {
+            $this->timestamp = microtime(true)*1E6;
+            //For every process need update ProcTree for main process Every 1 second
+            $this->updateProcTree();
+            //Log::systemLog('debug', 'PROC TREE '. json_encode($this->proc_tree).' proc='. getmypid());
+            
+            //Main taks for this process - manage exchanges's workers
+            //Periodic read DB for tasks and create trade worker processes
+            
+            $this->manageAutoTraderWorkers();
+                        
+            usleep(100);
+        }
+    }
+    
+    private function manageAutoTraderWorkers() {
+        global $DB;
+        
+        //run every 5 seconds, search in DB new tasks
+        $sb = self::checkTimer($this->timer_update_trade_workers, $this->timer_update_trade_workers_ts);
+        if($sb) {
+            $this->timer_update_trade_workers_ts = microtime(true)*1E6;
+            
+            //Define Trader Workers
+            $sql = 'SELECT 
+                        ACCOUNT_ID AS ACCOUNT_ID,
+                        PAIR_ID AS WORKERS_PAIR_ID,
+                        MARKET AS MARKET
+                    FROM
+                    (
+                        (
+                            SELECT 
+                                ea.ID AS ACCOUNT_ID,
+                                e.ID AS EXID,
+                                0 AS PAIR_ID,
+                                \'spot\' AS MARKET
+                            FROM 
+                                TRADE_SPOT_ARRAYS tsa
+                            INNER JOIN
+                                TRADE tr ON tr.ID = tsa.TRADE_ID
+                            LEFT JOIN 
+                                EXCHANGE_ACCOUNTS ea ON ea.ID = tsa.EAID
+                            LEFT JOIN 
+                                EXCHANGE e ON e.ID = ea.EXID 
+                            INNER JOIN 
+                                `USER` u ON u.ID = tr.UID 
+                            INNER JOIN 
+                                USERS_GROUP ug ON ug.UID = u.ID AND ug.GID = 2
+                            INNER JOIN 
+                                `GROUP` g ON g.ID = ug.GID
+                            WHERE 
+                                tr.`TYPE` IN (1,2,5)
+                                AND tr.ACTIVE = 1
+                                AND ea.ACTIVE = 1
+                                AND e.ACTIVE = 1
+                                AND u.ACTIVE = 1
+                                AND g.ACTIVE = 1
+                            GROUP BY 
+                                e.ID,
+                                ea.ID
+                        )
+                        UNION
+                        (   
+                            SELECT 
+                                ea.ID AS ACCOUNT_ID,
+                                e.ID AS EXID,
+                                tsa.PAIR_ID AS PAIR_ID,
+                                \'spot\' AS MARKET
+                            FROM 
+                                TRADE_SPOT_ARRAYS tsa
+                            INNER JOIN
+                                TRADE tr ON tr.ID = tsa.TRADE_ID
+                            LEFT JOIN 
+                                EXCHANGE_ACCOUNTS ea ON ea.ID = tsa.EAID
+                            LEFT JOIN 
+                                EXCHANGE e ON e.ID = ea.EXID 
+                            INNER JOIN 
+                                `USER` u ON u.ID = tr.UID 
+                            INNER JOIN 
+                                USERS_GROUP ug ON ug.UID = u.ID AND ug.GID = 2
+                            INNER JOIN 
+                                `GROUP` g ON g.ID = ug.GID
+                            WHERE 
+                                tr.`TYPE` IN (3,4)
+                                AND tr.ACTIVE = 1
+                                AND ea.ACTIVE = 1
+                                AND e.ACTIVE = 1
+                                AND u.ACTIVE = 1
+                                AND g.ACTIVE = 1
+                            GROUP BY 
+                                e.ID,
+                                ea.ID,
+                                tsa.PAIR_ID
+                        )
+                    ) t;';
+            $trade_worker_list = $DB->select($sql);
+            if(!empty($DB->getLastError())) {
+                $message = "ERROR define Trader Workers. ".$DB->getLastError();
+                Log::systemLog('error', $message, "Trade Worker Monitor");
+                return false;
+            }
+            
+            if($trade_worker_list !== false && !empty($trade_worker_list)) {
+                foreach ($trade_worker_list as $tr) {
+                    // Step 1
+                    $trade_worker_exist_flag = false;
+                    if(!empty($this->proc)) {
+                        foreach ($this->proc as $k=>$proc) {
+                            if($proc['trade_worker_account_id'] === $tr['ACCOUNT_ID'] 
+                                    && $proc['trade_worker_pair_id'] === $tr['WORKERS_PAIR_ID']
+                                    && $proc['trade_worker_market'] === $tr['MARKET']
+                                    && $proc['pid'] > 0) {
+                                
+                                $trade_worker_exist_flag = true;
+                                //Check response
+                                if((microtime(true)*1E6 - $proc['timestamp'])*1E-6 > 9) {
+                                    $trade_worker_exist_flag = false;
+                                    Log::systemLog('error', 'Proc='.$proc['pid'].' Traader Worker NOT RESPONSE more 9 seconds.', "Trade Worker Monitor");
+                                    $kill = posix_kill($this->proc[$k], SIGTERM);
+                                    unset($this->proc[$k]);
+                                    if(!empty($this->proc_tree)) {   
+                                        foreach($this->proc_tree as $k2=>$proc2) {
+                                            if($proc2['pid'] == $proc['pid']) {
+                                                unset($this->proc_tree[$k]);
+                                            }
+                                        }
+                                    }
+                                    if($kill) {
+                                        Log::systemLog('error', 'Proc Worker Trader process ='.$proc['pid'].' is killed.', "Trade Worker Monitor" );
+                                    }
+                                    else {
+                                        Log::systemLog('error', 'ERROR kill Worker Trader process ='.$proc['pid'], "Trade Worker Monitor");
+                                    }
+                                }
+                            }
+   
+                        }
+                    }
+                    //Step 2
+                    //Create new child process if he is not exist
+                    if(!$trade_worker_exist_flag) {
+                        $DB->close();
+                        $msg = array('trade_worker_account_id'=>$tr['ACCOUNT_ID'],'trade_worker_pair_id'=>$tr['WORKERS_PAIR_ID'],'trade_worker_market'=>$tr['MARKET']);
+                        $tpid = $this->newProcess('ctd_trade_worker');
+                        $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
+                        Log::systemLog('debug', 'Init start Trade Worker proc = '. $tpid.' ACCOUNT_ID = '.$tr['ACCOUNT_ID'].' WORKERS_PAIR_ID = '.$tr['WORKERS_PAIR_ID'].' MARKET = '.$tr['MARKET'], "Trade Worker Monitor");
+                        //Add information to proccess
+                        foreach ($this->proc as $kproc=>$proc) {
+                            if($proc['pid'] == $tpid) {
+                                $this->proc[$kproc]['trade_worker_account_id'] = $tr['ACCOUNT_ID'];
+                                $this->proc[$kproc]['trade_worker_pair_id'] = $tr['WORKERS_PAIR_ID'];
+                                $this->proc[$kproc]['trade_worker_pair_name'] = Exchange::detectNamesPair($tr['WORKERS_PAIR_ID']);
+                                $this->proc[$kproc]['trade_worker_market'] = $tr['MARKET'];
+                            }
+                        }
+                        //Log::systemLog('debug', 'WORKER PROC ='. json_encode($this->proc));
+                        //
+                        //Step 3
+                        //Send new process info 
+                        ServiceRAM::write($tpid,'create_trade_worker',$msg);
+                        Log::systemLog('debug', 'SEND to ServiceRAM command "create_trade_worker" to process = '. $tpid.' from pid = '.getmypid().' '. json_encode($msg));
+                    }
+                }
+            }
+
+            //Step 4
+            if(!empty($this->proc)) {   
+                //Destroy excess processes
+                foreach($this->proc as $k=>$proc) {
+                    $trade_worker_remove_flag = true;
+                    if(!empty($trade_worker_list)) {
+                        foreach ($trade_worker_list as $key=>$tr) {
+                            if($proc['trade_worker_account_id'] === $tr['ACCOUNT_ID'] 
+                                                && $proc['trade_worker_pair_id'] === $tr['WORKERS_PAIR_ID']
+                                                && $proc['trade_worker_market'] === $tr['MARKET']) {
+                                $trade_worker_remove_flag = false;
+                            }
+                        }
+                    }
+                    //kill process
+                    if($trade_worker_remove_flag === true) {
+                        Log::systemLog('debug', 'Kill excess Trader Worker process = '.$proc['pid'].' ACCOUNT_ID = '.$tr['ACCOUNT_ID'].' WORKERS_PAIR_ID = '.$tr['WORKERS_PAIR_ID'].' MARKET = '.$tr['MARKET'], "Trade Worker Monitor");
+                        $kill = posix_kill($proc['pid'], SIGTERM);  
+                        if($kill) {
+                            unset($this->proc[$k]);
+                            if(!empty($this->proc_tree)) {   
+                                foreach($this->proc_tree as $kt=>$proct) {
+                                    if($proc['pid'] == $proct['pid']) {
+                                        unset($this->proc_tree[$kt]);
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            Log::systemLog('error', 'ERROR kill excess Trader process ='.$proc['pid'].' ACCOUNT_ID = '.$tr['ACCOUNT_ID'].' WORKERS_PAIR_ID = '.$tr['WORKERS_PAIR_ID'].' MARKET = '.$tr['MARKET'], "Trade Worker Monitor");
+                        }
+                    }
+                }
+            }  
+        }
+    }
+    
+     private function runProcTradeWorker() {
+        global $DB; 
+         
+        Log::systemLog('info',"Process type \"Trade Worker\" STARTED pid=".getmypid(), "Trade Worker");  
+        do {
+            $task_create_worker = ServiceRAM::read('create_trade_worker');
+        }
+        while($task_create_worker === false || empty($task_create_worker));
+        Log::systemLog('debug', 'Process "Trade Worker" pid='. getmypid().' received = '.json_encode($task_create_worker), "Trade Worker");
         while(1) {
             $this->timestamp = microtime(true)*1E6;
             $this->updateProcTree();
+            
             
             usleep(100000);
         }
@@ -854,7 +1109,11 @@ class ctdaemon {
     //Get from database Exchange pair list to open websocket and read subscribed depth
     public function getActiveExchangePairOrderBook() {
         global $DB;
-      
+        
+        /**SPOT Market
+         * SELECT 1 - Select active trade pairs
+         * SELECT 2 - Select from monitorng table
+         */
         $sql = 'SELECT 
                     stp.EXCHANGE_ID,
                     t.PAIR_ID 
@@ -989,6 +1248,18 @@ class ctdaemon {
                                    }
                                    if(isset($proc['trade_id'])) {
                                        $tmp['trade_id'] = $proc['trade_id'];
+                                   }
+                                   if(isset($proc['trade_worker_account_id'])) {
+                                       $tmp['acc_id'] = $proc['trade_worker_account_id'];
+                                   }
+                                   if(isset($proc['trade_worker_pair_id'])){
+                                       $tmp['trade_worker_pair_id'] = $proc['trade_worker_pair_id'];
+                                   }
+                                   if(isset($proc['trade_worker_pair_name'])){
+                                       $tmp['trade_worker_pair_name'] = $proc['trade_worker_pair_name'];
+                                   }
+                                   if(isset($proc['trade_worker_market'])) {
+                                       $tmp['trade_worker_market'] = $proc['trade_worker_market'];
                                    }
                                    $tmp['child'] = $pt;
                                    if(empty($this->proc_tree)) {

@@ -7,6 +7,7 @@ class Huobi implements ExchangeInterface {
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
+    private $websoket_conn_id = '';
     
     private $account_id = 0;
     private $api_key = '';
@@ -541,6 +542,26 @@ class Huobi implements ExchangeInterface {
 
         $client = new \WebSocket\Client($options['uri'], $options);
         if($client) {
+            try {
+                $receive = $client->receive();
+                $received = gzdecode($receive);
+                $r = json_decode($received, JSON_OBJECT_AS_ARRAY);
+                if(isset($r['ping'])) {
+                    $this->websoket_conn_id = $r['ping'];
+                }
+            }
+            catch (\WebSocket\TimeoutException $e) {
+                $src = '';
+                switch($type) {
+                    case 'orderbook': 
+                        $src = 'Order Book';
+                        break;
+                    default:
+                        $src = '';
+                }
+                Log::systemLog('error', 'ERROR CONNECT to Huobi exchange proc='. getmypid().'',$src);
+                return false;
+            }
             return $client;
         }
         return false;

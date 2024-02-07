@@ -7,6 +7,7 @@ class Poloniex implements ExchangeInterface {
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
+    private $websoket_conn_id = '';
     
     private $account_id = 0;
     private $api_key = '';
@@ -623,6 +624,15 @@ class Poloniex implements ExchangeInterface {
         if($client) {
             return $client;
         }
+        $src = '';
+        switch($type) {
+            case 'orderbook': 
+                $src = 'Order Book';
+                break;
+            default:
+                $src = '';
+        }
+        Log::systemLog('error', 'ERROR CONNECT to Poloniex exchange proc='. getmypid().'',$src);
         return false;
     }
     public function getWebSoketCount() {
