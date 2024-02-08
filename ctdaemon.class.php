@@ -1099,11 +1099,29 @@ class ctdaemon {
         }
     }
     private function runProcOrderTransMonitor() {
+        global $DB;
+        //Create DB connection
+        $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
+        
+        Log::systemLog('info',"Process type \"Order and Transaction Monitor\" STARTED pid=".getmypid(), "Order&Trans Monitor");    
+        
         while(1) {
             $this->timestamp = microtime(true)*1E6;
+            //For every process need update ProcTree for main process Every 1 second
             $this->updateProcTree();
-            usleep(100000);
+            //Log::systemLog('debug', 'PROC TREE '. json_encode($this->proc_tree).' proc='. getmypid());
+            
+            //Main taks for this process - manage transacions and orders logger precesses
+            //Periodic read DB for tasks and create processes
+            
+            $this->manageAutoOrderTrans();
+                        
+            usleep(100);
         }
+    }
+    
+    private function manageAutoOrderTrans() {
+        return false;
     }
        
     //Get from database Exchange pair list to open websocket and read subscribed depth
