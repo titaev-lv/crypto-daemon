@@ -581,8 +581,18 @@ class Huobi implements ExchangeInterface {
         return true;
     }
     public function webSocketParse($receive) {
-        $unzip_receive = gzdecode($receive);
+        $is_gzip = 0 === mb_strpos($receive, "\x1f" . "\x8b" . "\x08", 0, "US-ASCII");
+        if($is_gzip) {
+            $unzip_receive = gzdecode($receive);
+        }
+        else {
+            Log::systemLog('error', 'Error received message. Data not gzipped: '.$receive);
+            $ret['method'] = 'error';
+            return $ret;
+        }
+        //$unzip_receive = gzdecode($receive);
         //Log::systemLog('debug', $unzip_receive);
+        //Reseive json message
         $r = json_decode($unzip_receive, JSON_OBJECT_AS_ARRAY);
         $ret = array();
         //PING

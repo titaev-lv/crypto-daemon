@@ -412,7 +412,7 @@ class ctdaemon {
                     if($ping) {
                         $ob->timer_update_ob_ping_ts = microtime(true)*1E6;
                         $ping = $exchange->webSocketPing($ws);
-                        //Log::systemLog('debug', 'Exchange order book proc='. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' send PING');
+                        Log::systemLog('debug', 'Exchange order book proc='. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' send PING');
                     }
                 }
                 //control timeout and false receive. Only websocket
@@ -452,42 +452,53 @@ class ctdaemon {
                         //Log::systemLog('debug', 'Echange order book process = '. getmypid().' webSoket receive NATIVE from '.$ob->exchange_name.' ='. $received, "Order Book");
                         $return = $exchange->webSocketParse($received);
                         //agregate addition data -> add ID and sys name trade pair
-                        switch($return['method']) {
-                            case 'depth':
-                                //search in subscribe array
-                                $found_sunscribe = false;
-                                if(is_array($ob->subscribe)) {
-                                    foreach ($ob->subscribe as $s) {
-                                        foreach ($return['data'] as $d) {
-                                            if($s['name'] == $d['pair']) {
-                                                $found_sunscribe = true;
+                        if($return) {
+                            switch($return['method']) {
+                                case 'depth':
+                                    //search in subscribe array
+                                    $found_sunscribe = false;
+                                    if(is_array($ob->subscribe)) {
+                                        foreach ($ob->subscribe as $s) {
+                                            foreach ($return['data'] as $d) {
+                                                if($s['name'] == $d['pair']) {
+                                                    $found_sunscribe = true;
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                //Write data into RAM
-                                if($found_sunscribe === true) {
-                                    $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
-                            //        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return_merge), "Order Book");                                                     
-                                    $ob->writeDepthRAM($return_merge);
-                                }
-                                break;
-                            case 'pong':
-                                //update all pair timestamp
-                                $ob->writeDepthRAMupdatePong();
-                            //    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
-                                break;
-                            case 'ping':
-                                $ob->writeDepthRAMupdatePing();
-                                $msg = array();
-                                $msg['pong'] = $return['timestamp'];  
-                                $msg_json = json_encode($msg);
-                                $ws->text($msg_json);
-                            //    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
-                                break;
-                            default:
-                                ;
-                                //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
+                                    //Write data into RAM
+                                    if($found_sunscribe === true) {
+                                        $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
+                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return_merge), "Order Book");                                                     
+                                        $ob->writeDepthRAM($return_merge);
+                                    }
+                                    break;
+                                case 'pong':
+                                    //update all pair timestamp
+                                    $ob->writeDepthRAMupdatePong();
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
+                                    break;
+                                case 'ping':
+                                    $ob->writeDepthRAMupdatePing();
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
+                                    $msg = array();
+                                    $msg['pong'] = $return['timestamp'];  
+                                    $msg_json = json_encode($msg);
+                                    $ws->text($msg_json);
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Response PONG '. $msg_json, "Order Book");
+                                    break;
+                                case 'error':
+                                    $need_reconnect = true;
+                                    $ob->eraseDepthRAM();
+                                    unset($ws);
+                                    $ob->time_count_timeout = 0;
+                                    break;
+                                default:
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
+                            }
+                        }
+                        else {
+                            Log::systemLog('warn', 'Echange order book process = '. getmypid().' webSoket receive UNKNOW NATIVE from '.$ob->exchange_name.' receive:'. $received, "Order Book");
                         }
                     } catch (\WebSocket\TimeoutException $e) {
                         //timeout read
