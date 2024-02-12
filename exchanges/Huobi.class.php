@@ -586,7 +586,7 @@ class Huobi implements ExchangeInterface {
             $unzip_receive = gzdecode($receive);
         }
         else {
-            Log::systemLog('error', 'Error received message. Data not gzipped: '.$receive);
+            Log::systemLog('error', 'Error received message. Data not gzipped: '.$receive, 'Order Book');
             $ret['method'] = 'error';
             return $ret;
         }
