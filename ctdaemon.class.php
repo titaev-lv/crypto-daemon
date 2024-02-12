@@ -386,6 +386,7 @@ class ctdaemon {
                         $previous_subscribe = $ob->subscribe;
                     }
                     if(empty($ob->subscribe) || $ob->subscribe_crc !== $subscribe_crc32) {
+                        $ob->subscribe = $tasks;
                         $ob->subscribe_crc = $subscribe_crc32;
                         $new_subscribe = true;
                     }
