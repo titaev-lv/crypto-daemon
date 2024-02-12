@@ -381,7 +381,7 @@ class ctdaemon {
 
                     $tasks = $pairs['data'];
                     //Log::systemLog('debug', 'Exchange order book proc='. getmypid().' '.$ob->exchange_name.' '.json_encode($tasks));
-                    $subscribe_crc32 = crc32(json_encode($tasks);
+                    $subscribe_crc32 = crc32(json_encode($tasks));
                     if($ob->subscribe_crc !== $subscribe_crc32) {
                         $previous_subscribe = $ob->subscribe;
                     }
