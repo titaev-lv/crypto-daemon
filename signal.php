@@ -15,19 +15,18 @@ function sigHandler($signal) {
                     //destroy memory order book
                     if(isset($pval['name']) && $pval['name'] == 'ctd_exchange_orderbook') {
                         if(isset($pval['exchange_name'])) {
-                            $id = ftok(__DIR__."/ftok/".$pval['exchange_name']."Depth.php", 'A');
-                            $shmId = shm_attach($id);
-                            shm_remove($shmId);
-                            //destroy semaphores
-                            $semId = sem_get($id);
-                            sem_remove($semId);
-                            $id = ftok(__DIR__."/ftok/".$pval['exchange_name']."Depth.php", 'B');
-                            $shmId = shm_attach($id);
-                            shm_remove($shmId);
-                            //destroy semaphores
-                            $semId = sem_get($id);
-                            sem_remove($semId);
-                            Log::systemLog(4,"Destroy memory ".$pval['exchange_name']." order book");
+                            if(isset($pval['subscribe']) && !empty($pval['subscribe'])) {
+                                foreach ($pval['subscribe'] as $s) {
+                                    $hash = hash('xxh3', $pval['exchange_id'].'|'.$pval['market'].'|'.$s['id']);
+                                    $id = ftok(__DIR__."/ftok/".$hash.".ftok", 'A');
+                                    $shmId = shm_attach($id);
+                                    shm_remove($shmId);
+                                    //destroy semaphores
+                                    $semId = sem_get($id);
+                                    sem_remove($semId);
+                                    Log::systemLog(4,"Destroy memory ".$hash." order book");
+                                }
+                            }
                         }
                     }
                 }

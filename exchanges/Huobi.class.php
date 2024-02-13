@@ -518,6 +518,7 @@ class Huobi implements ExchangeInterface {
                     if($d['pair'] == $adata['name']) {
                         $src['data'][$k]['sys_pair'] = $adata['sys_name'];
                         $src['data'][$k]['pair_id'] = $adata['id'];
+                        $src['data'][$k]['ftok_crc'] = $adata['ftok_crc'];
                         break;
                     }
                 }

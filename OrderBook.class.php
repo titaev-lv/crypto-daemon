@@ -22,72 +22,72 @@ class OrderBook {
     function __construct() {
         $this->timer_update_ob_ping = microtime(true)*1E6;
     }
-    
-    public function eraseDepthRAM () {
-        $lit = '';
-        switch ($this->market){
-            case 'features':
-                $lit = 'B';
-                break;
-            case 'spot':
-            default:
-                $lit = 'A';
-        }
-        $id = ftok(__DIR__."/ftok/".$this->exchange_name."Depth.php", $lit);
         
-        //Semaphore
-        $semId = sem_get($id);
-        sem_acquire($semId);
-        $data_arr = array();
-        $data_json = json_encode($data_arr);
-        $shmId = shm_attach($id, strlen($data_json)+4096);
-        $var = 1;
-        shm_put_var($shmId, $var, $data_json);
-        shm_detach($shmId);
-        sem_release($semId);
+    public function eraseDepthRAM () {
+        if(!empty($this->subscribe)) {
+            foreach ($this->subscribe as $key=>$p) {
+                $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
+                if(!is_file($path)) {
+                    $file = fopen($path, 'w');
+                    if($file){
+                        fclose($file);
+                    }
+                }
+                $id = ftok($path, 'A');
+                //Semaphore
+                $semId = sem_get($id);
+                sem_acquire($semId);
+                $data_arr = array();
+                $data_json = json_encode($data_arr);
+                $shmId = shm_attach($id, strlen($data_json)+4096);
+                $var = 1;
+                shm_put_var($shmId, $var, $data_json);
+                shm_detach($shmId);
+                sem_release($semId);
+            }
+        }
         return true;
     }
     
     public function writeDepthRAM($data_upd) {
         //$start = microtime(true);
-        $lit = '';
-        switch ($this->market){
-            case 'features':
-                $lit = 'B';
-                break;
-            case 'spot':
-            default:
-                $lit = 'A';
-        }
-        $id = ftok(__DIR__."/ftok/".$this->exchange_name."Depth.php", $lit);
-        
-        //Semaphore
-        $semId = sem_get($id);
-        sem_acquire($semId);
-        //read segment
-        $shmId = shm_attach($id);
-        $var = 1;
-        $data = '';
-        $data_arr = array();
-        if(shm_has_var($shmId, $var)) {
-            //get data
-            $data = shm_get_var($shmId, $var);
-        } 
-        shm_detach($shmId);
-        //
-        if(!empty($data)) {
-            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
-        }
-
-        if(!is_array($data_arr)) {
-            $data_arr = array();
-        }
-        
-        //Log::systemLog(4, 'ORDER BOOK READ RAM '.json_encode($data_arr));
-        
+        //Log::systemLog(4, 'ORDER BOOK DATA TO WRITE RAM '.json_encode($data_upd));
+        $nu = array();
         foreach ($data_upd['data'] as $d) {
+            //$start1 = microtime(true);
+            $path = __DIR__."/ftok/".$d['ftok_crc'].'.ftok';
+            if(!is_file($path)) {
+                $file = fopen($path, 'w');
+                if($file){
+                    fclose($file);
+                }
+            }
+            $nu[] = $d['ftok_crc'];
+            $id = ftok($path, 'A');
+            //Semaphore
+            $semId = sem_get($id);
+            sem_acquire($semId);
+            //read segment
+            $shmId = shm_attach($id);
+            $var = 1;
+            $data = '';
+            $data_arr = array();
+            if(shm_has_var($shmId, $var)) {
+                //get data
+                $data = shm_get_var($shmId, $var);
+            } 
+            shm_detach($shmId);
+            //
+            if(!empty($data)) {
+                $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+            }
+
+            if(!is_array($data_arr)) {
+                $data_arr = array();
+            }
+
             $element = array();
-            if($d['diff'] === false || !isset($data_arr[$d['pair_id']])) {
+            if($d['diff'] == false || empty($data_arr)) {
                 $element['sys_pair'] = $d['sys_pair'];
                 $element['pair'] = $d['pair'];
                 $element['timestamp'] = $d['timestamp'];
@@ -106,11 +106,10 @@ class OrderBook {
                    $element['bids'][] = $tmp;
                    unset($tmp);
                 }
-                $data_arr[$d['pair_id']] = $element;
+                $data_arr = $element;    
             }
             elseif($d['diff'] === true){
-                $src_mem = $data_arr[$d['pair_id']];
-                
+                $src_mem = $data_arr;    
                 $resort_bids = false;
                 if(isset($d['bids'])) {
                     foreach ($d['bids'] as $b) {
@@ -136,7 +135,7 @@ class OrderBook {
                         }
                     }
                 }    
-                    
+
                 $resort_asks = false;
                 if(isset($d['asks'])) {
                   //  $resort = false;
@@ -163,7 +162,7 @@ class OrderBook {
                         }
                     }
                 }
-                    
+
                 if($resort_bids === true) {
                     usort($src_mem['bids'], function($a,$b){return $b[0]<=>$a[0];});
                 } 
@@ -171,129 +170,180 @@ class OrderBook {
                     usort($src_mem['asks'], function($a,$b){return $a[0]<=>$b[0];});
                 }
                 $src_mem['timestamp'] = $d['timestamp'];
-                $data_arr[$d['pair_id']] = $src_mem;
+                $data_arr = $src_mem;
                 //Log::systemLog(4, 'ORDER BOOK ARR FOR MERGE '.json_encode($src));                
             }
         }
-        //Log::systemLog(4, 'ORDER BOOK WRITE TO RAM '.json_encode($data_arr));
         $data_json = json_encode($data_arr);
         $shmId = shm_attach($id, strlen($data_json)+4096);
         $var = 1;
         shm_put_var($shmId, $var, $data_json);
         shm_detach($shmId);
         sem_release($semId);
-        //$time = microtime(true) - $start;
-        //Log::systemLog('debug', 'WRITE TIME Order Book RAM '.$time.'s');
+        
+        //$term1 = microtime(true) - $start1;
+        //Log::systemLog(4, 'NEW Write RAM STEP1 '.$term1. ' '.$d['ftok_crc']);
+        //Update timestamp for all exchange's trade pair
+        if(!empty($this->subscribe)) {
+            foreach ($this->subscribe as $key=>$p) {
+                if(!in_array($p['ftok_crc'], $nu)) {
+                    //$start2 = microtime(true);
+                    $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
+                    if(!is_file($path)) {
+                        $file = fopen($path, 'w');
+                        if($file){
+                            fclose($file);
+                        }
+                    }
+                    $id = ftok($path, 'A');
+                    //Semaphore
+                    $semId = sem_get($id);
+                    sem_acquire($semId);
+                    //read segment
+                    $shmId = shm_attach($id);
+                    $var = 1;
+                    $data = '';
+                    $data_arr = array();
+                    if(shm_has_var($shmId, $var)) {
+                        //get data
+                        $data = shm_get_var($shmId, $var);
+                    } 
+                    shm_detach($shmId);
+                    //
+                    if(!empty($data)) {
+                        $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+                    }
+
+                    if(!is_array($data_arr)) {
+                        $data_arr = array();
+                    }
+
+                    $data_arr['timestamp'] = microtime(true)*1E6;
+                    $data_json = json_encode($data_arr);
+
+                    $shmId = shm_attach($id, strlen($data_json)+4096);
+                    $var = 1;
+                    shm_put_var($shmId, $var, $data_json);
+                    shm_detach($shmId);
+                    sem_release($semId);
+                    //$term2 = microtime(true) - $start2;
+                    //Log::systemLog(4, 'NEW Write RAM STEP2 '.$term1. ' '.$p['ftok_crc']);
+                }
+            }
+        }
+        //Log::systemLog(4, 'ORDER BOOK WRITE RAM NEW '.json_encode($data_arr));
+        //$term = microtime(true) - $start;
+        //Log::systemLog(4, 'NEW Write RAM '.$term);
         return true;
     }
     
-    public function writeDepthRAMupdatePong() {        
-        $lit = '';
-        switch ($this->market){
-            case 'features':
-                $lit = 'B';
-                break;
-            case 'spot':
-            default:
-                $lit = 'A';
-        }
-        $id = ftok(__DIR__."/ftok/".$this->exchange_name."Depth.php", $lit);
-        
-        //Semaphore
-        $semId = sem_get($id);
-        sem_acquire($semId);
-        //read segment
-        $shmId = shm_attach($id);
-        $var = 1;
-        $data = '';
-        $data_arr = array();
-        if(shm_has_var($shmId, $var)) {
-            //get data
-            $data = shm_get_var($shmId, $var);
-        } 
-        shm_detach($shmId);
-        //
-        if(!empty($data)) {
-            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
-        }
-
-        if(!is_array($data_arr)) {
-            $data_arr = array();
-        }
-        
-        //Log::systemLog(4, 'ORDER BOOK READ PING RAM '.json_encode($data_arr));
-        foreach ($data_arr as $k=>$d) {
-            $data_arr[$k]['timestamp'] = microtime(true)*1E6;
-        }
-        //Log::systemLog(4, 'ORDER BOOK WRITE PING RAM '.json_encode($data_arr));
-        $data_json = json_encode($data_arr);
-        $shmId = shm_attach($id, strlen($data_json)+4096);
-        $var = 1;
-        shm_put_var($shmId, $var, $data_json);
-        shm_detach($shmId);
-        sem_release($semId);
-        return true;
-    }
-    public function writeDepthRAMupdatePing() {
-        $lit = '';
-        switch ($this->market){
-            case 'features':
-                $lit = 'B';
-                break;
-            case 'spot':
-            default:
-                $lit = 'A';
-        }
-        $id = ftok(__DIR__."/ftok/".$this->exchange_name."Depth.php", $lit);
-        
-        //Semaphore
-        $semId = sem_get($id);
-        sem_acquire($semId);
-        //read segment
-        $shmId = shm_attach($id);
-        $var = 1;
-        $data = '';
-        $data_arr = array();
-        if(shm_has_var($shmId, $var)) {
-            //get data
-            $data = shm_get_var($shmId, $var);
-        } 
-        shm_detach($shmId);
-        //
-        if(!empty($data)) {
-            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
-        }
-
-        if(!is_array($data_arr)) {
-            $data_arr = array();
-        }
-        
-        //Log::systemLog(4, 'ORDER BOOK READ PING RAM '.json_encode($data_arr));
-        foreach ($data_arr as $k=>$d) {
-            $data_arr[$k]['timestamp'] = microtime(true)*1E6;
-        }
-        //Log::systemLog(4, 'ORDER BOOK WRITE PING RAM '.json_encode($data_arr));
-        $data_json = json_encode($data_arr);
-        $shmId = shm_attach($id, strlen($data_json)+4096);
-        $var = 1;
-        shm_put_var($shmId, $var, $data_json);
-        shm_detach($shmId);
-        sem_release($semId);
-        return true;
-    }
-    public static function readDepthRAM($exchange_name,$market) {
+    public function writeDepthRAMupdatePong() {  
         //$start = microtime(true);
-        $lit = '';
-        switch ($market){
-            case 'features':
-                $lit = 'B';
-                break;
-            case 'spot':
-            default:
-                $lit = 'A';
+        if(!empty($this->subscribe)) {
+            foreach ($this->subscribe as $key=>$p) {
+                $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
+                if(!is_file($path)) {
+                    $file = fopen($path, 'w');
+                    if($file){
+                        fclose($file);
+                    }
+                }
+                $id = ftok($path, 'A');
+                //Semaphore
+                $semId = sem_get($id);
+                sem_acquire($semId);
+                //read segment
+                $shmId = shm_attach($id);
+                $var = 1;
+                $data = '';
+                $data_arr = array();
+                if(shm_has_var($shmId, $var)) {
+                    //get data
+                    $data = shm_get_var($shmId, $var);
+                } 
+                shm_detach($shmId);
+                //
+                if(!empty($data)) {
+                    $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+                }
+
+                if(!is_array($data_arr)) {
+                    $data_arr = array();
+                }
+                
+                $data_arr['timestamp'] = microtime(true)*1E6;
+                $data_json = json_encode($data_arr);
+                
+                $shmId = shm_attach($id, strlen($data_json)+4096);
+                $var = 1;
+                shm_put_var($shmId, $var, $data_json);
+                shm_detach($shmId);
+                sem_release($semId);
+            }
         }
-        $id = ftok(__DIR__."/ftok/".$exchange_name."Depth.php", $lit);
-        
+        //$time = microtime(true) - $start;
+        //Log::systemLog('debug', 'PONG TIME Order Book RAM NEW '.$time.'s');
+        return true;
+    }
+    
+    public function writeDepthRAMupdatePing() {
+        //$start = microtime(true);
+        if(!empty($this->subscribe)) {
+            foreach ($this->subscribe as $key=>$p) {
+                $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
+                if(!is_file($path)) {
+                    $file = fopen($path, 'w');
+                    if($file){
+                        fclose($file);
+                    }
+                }
+                $id = ftok($path, 'A');
+                //Semaphore
+                $semId = sem_get($id);
+                sem_acquire($semId);
+                //read segment
+                $shmId = shm_attach($id);
+                $var = 1;
+                $data = '';
+                $data_arr = array();
+                if(shm_has_var($shmId, $var)) {
+                    //get data
+                    $data = shm_get_var($shmId, $var);
+                } 
+                shm_detach($shmId);
+                //
+                if(!empty($data)) {
+                    $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+                }
+
+                if(!is_array($data_arr)) {
+                    $data_arr = array();
+                }
+                
+                $data_arr['timestamp'] = microtime(true)*1E6;
+                $data_json = json_encode($data_arr);
+                
+                $shmId = shm_attach($id, strlen($data_json)+4096);
+                $var = 1;
+                shm_put_var($shmId, $var, $data_json);
+                shm_detach($shmId);
+                sem_release($semId);
+            }
+        }   
+        return true;
+    }
+    
+    public static function readDepthRAM($hash) {
+        //$start = microtime(true);
+        $path = __DIR__."/ftok/".$hash.'.ftok';
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'A');
+        //$start1 = microtime(true);
         //set semaphore
         $semId = sem_get($id);
         sem_acquire($semId);
@@ -312,15 +362,17 @@ class OrderBook {
             return false;
         }
         shm_detach($shmId);
+        sem_release($semId);
+        //$time1 = microtime(true) - $start1;
+        //Log::systemLog('debug', 'READ TIME Order Book ONLY RAM '.$time1.'s');
         //
         if(!empty($data)) {
             $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
         }
         else {
-            sem_release($semId);
             return false;
         }
-        sem_release($semId);  
+          
         //$time = microtime(true) - $start;
         //Log::systemLog('debug', 'READ TIME Order Book RAM '.$time.'s');
         return $data_arr; 

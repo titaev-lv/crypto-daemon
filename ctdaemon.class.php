@@ -382,7 +382,7 @@ class ctdaemon {
                     $tasks = $pairs['data'];
                     //Log::systemLog('debug', 'Exchange order book proc='. getmypid().' '.$ob->exchange_name.' '.json_encode($tasks));
                     $subscribe_crc32 = crc32(json_encode($tasks));
-                    if($ob->subscribe_crc !== $subscribe_crc32) {
+                    if(!empty($ob->subscribe) && $ob->subscribe_crc !== $subscribe_crc32) {
                         $previous_subscribe = $ob->subscribe;
                     }
                     if(empty($ob->subscribe) || $ob->subscribe_crc !== $subscribe_crc32) {
@@ -390,8 +390,16 @@ class ctdaemon {
                         $ob->subscribe_crc = $subscribe_crc32;
                         $new_subscribe = true;
                     }
-
                     if($new_subscribe) {
+                        //Create ftok crc hash for segment RAM
+                        foreach($ob->subscribe as $k=>$s) {
+                            if(!isset($s['ftok_crc']) || empty($s['ftok_crc'])) {
+                                // Exchange ID | Market (spot) | PAIR ID
+                                //Log::systemLog('debug', 'STRING CRC '.$ob->exchange_id.'|'.$ob->market.'|'.$s['id'], "Order Book");
+                                $ob->subscribe[$k]['ftok_crc'] = hash('xxh3',$ob->exchange_id.'|'.$ob->market.'|'.$s['id']);
+                            }
+                        }
+                        //Log::systemLog('debug', 'PROC SUBSCRIBE '. getmypid().' '. json_encode($ob->subscribe), "Order Book");
                         $ob->eraseDepthRAM();
                         Log::systemLog('debug', 'Echange order book process = '. getmypid().' New subscribe data='. json_encode($tasks), "Order Book");
                         if($exchange->isEnableWebsocket()) {
@@ -558,6 +566,7 @@ class ctdaemon {
     
     public function runProcPriceMonitor() {
         global $DB;
+        sleep(3);
         //Create DB connection
         $DB = DB::init($this->getDBEngine(),$this->getDBCredentials());
         Log::systemLog('info',"Process type \"Price Monitor\" STARTED pid=".getmypid(), "Price Monitor");
@@ -585,83 +594,92 @@ class ctdaemon {
                 //Read market data from RAM
                 if(isset($tasks_arr) && is_array($tasks_arr)) {
                     $date_obj = new DateTime('now', new DateTimeZone('UTC'));
-
-                    foreach ($tasks_arr as $t) {
-                        $pairs_arr = $t['spot'];
-                        $exchange_name = $t['name'];
-                        $spot_data = OrderBook::readDepthRAM($exchange_name, 'spot');
-                        //Log::systemLog('debug',"Process type \"Price Monitor\" spot DATA ".$exchange_name.' '. json_encode($spot_data));
-                        if(!empty($pairs_arr) && !empty($spot_data) && is_array($pairs_arr) && is_array($spot_data)) {
+                    $spot_data = array();
+                    foreach ($tasks_arr as $key=>$t) {
+                        if(isset($t['spot'])) {
+                            foreach ($t['spot'] as $key2=>$t2) {
+                                // Exchange ID | Market (spot) | PAIR ID
+                                $hash = hash('xxh3', $key.'|spot|'.$t2['id']);
+                                $spot_data[$t2['id']] = OrderBook::readDepthRAM($hash);
+                            }
+                        }
+                        if(isset($t['features'])) {
+                            
+                        }
+                    }
+                    //Log::systemLog('debug',"Process type \"Price Monitor\" DATA". json_encode($spot_data));
+                    if(!empty($spot_data)) {
+                        if(count($spot_data) > 0) {
                             $DB->startTransaction();
-                            foreach ($pairs_arr as $pa) {
-                                foreach ($spot_data as $ksd=>$sd) {
-                                    if($pa['id'] == $ksd) {
-                                        if(isset($sd['timestamp'])) {
-                                            $tmp = $sd['timestamp']*1E-6;
-                                            if((microtime(true)*1E-6 - $tmp) < 3500000) {
-                                                $sql = 'INSERT INTO `PRICE_SPOT_LOG` (
-                                                             `DATE`,
-                                                             `PRICE_TIMESTAMP`,
-                                                             `PAIR_ID`,
-                                                             ASKS5_PRICE,ASKS5_VOLUME,ASKS4_PRICE,ASKS4_VOLUME,ASKS3_PRICE,ASKS3_VOLUME,ASKS2_PRICE,ASKS2_VOLUME,ASKS1_PRICE,ASKS1_VOLUME,
-                                                             BIDS1_PRICE,BIDS1_VOLUME,BIDS2_PRICE,BIDS2_VOLUME,BIDS3_PRICE,BIDS3_VOLUME,BIDS4_PRICE,BIDS4_VOLUME,BIDS5_PRICE,BIDS5_VOLUME) 
-                                                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-                                                $bind = array();
-                                                $bind[0]['type'] = 's';
-                                                $bind[0]['value'] = $date_obj->format('Y-m-d H:i:s.u');
+                            foreach ($spot_data as $p=>$q) {
+                               // Log::systemLog('debug',"Process type \"Price Monitor\" QQQ ". json_encode($q));
+                                if(isset($q['timestamp']) && isset($q['asks']) && isset($q['bids'])) {
+                                    $tmp = $q['timestamp']*1E-6;
+                                    //Log::systemLog('debug',"TIMESTAMP ". $tmp);
+                                    //Log::systemLog('debug',"TIMESTAMP NOW ". microtime(true));
+                                    Log::systemLog('debug',"DELTA TIME ". (microtime(true) - $tmp));
+                                    if((microtime(true) - $tmp) < 4.5) {
+                                        $sql = 'INSERT INTO `PRICE_SPOT_LOG` (
+                                                     `DATE`,
+                                                     `PRICE_TIMESTAMP`,
+                                                     `PAIR_ID`,
+                                                     ASKS5_PRICE,ASKS5_VOLUME,ASKS4_PRICE,ASKS4_VOLUME,ASKS3_PRICE,ASKS3_VOLUME,ASKS2_PRICE,ASKS2_VOLUME,ASKS1_PRICE,ASKS1_VOLUME,
+                                                     BIDS1_PRICE,BIDS1_VOLUME,BIDS2_PRICE,BIDS2_VOLUME,BIDS3_PRICE,BIDS3_VOLUME,BIDS4_PRICE,BIDS4_VOLUME,BIDS5_PRICE,BIDS5_VOLUME) 
+                                                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+                                        $bind = array();
+                                        $bind[0]['type'] = 's';
+                                        $bind[0]['value'] = $date_obj->format('Y-m-d H:i:s.u');
 
-                                                $pair_time = DateTime::createFromFormat('U.u', number_format($tmp,3,".",""), new DateTimeZone('UTC'));
-                                                $bind[1]['type'] = 's';
-                                                $bind[1]['value'] = $pair_time->format('Y-m-d H:i:s.u');
-                                                $bind[2]['type'] = 'i';
-                                                $bind[2]['value'] = $ksd;
-                                                $bind[3]['type'] = 'd';
-                                                $bind[3]['value'] = $sd['asks'][4][0];
-                                                $bind[4]['type'] = 'd';
-                                                $bind[4]['value'] = $sd['asks'][4][1];
-                                                $bind[5]['type'] = 'd';
-                                                $bind[5]['value'] = $sd['asks'][3][0];
-                                                $bind[6]['type'] = 'd';
-                                                $bind[6]['value'] = $sd['asks'][3][1];
-                                                $bind[7]['type'] = 'd';
-                                                $bind[7]['value'] = $sd['asks'][2][0];
-                                                $bind[8]['type'] = 'd';
-                                                $bind[8]['value'] = $sd['asks'][2][1];
-                                                $bind[9]['type'] = 'd';
-                                                $bind[9]['value'] = $sd['asks'][1][0];
-                                                $bind[10]['type'] = 'd';
-                                                $bind[10]['value'] = $sd['asks'][1][1];
-                                                $bind[11]['type'] = 'd';
-                                                $bind[11]['value'] = $sd['asks'][0][0];
-                                                $bind[12]['type'] = 'd';
-                                                $bind[12]['value'] = $sd['asks'][0][1];
-                                                $bind[13]['type'] = 'd';
-                                                $bind[13]['value'] = $sd['bids'][0][0];
-                                                $bind[14]['type'] = 'd';
-                                                $bind[14]['value'] = $sd['bids'][0][1];
-                                                $bind[15]['type'] = 'd';
-                                                $bind[15]['value'] = $sd['bids'][1][0];
-                                                $bind[16]['type'] = 'd';
-                                                $bind[16]['value'] = $sd['bids'][1][1];
-                                                $bind[17]['type'] = 'd';
-                                                $bind[17]['value'] = $sd['bids'][2][0];
-                                                $bind[18]['type'] = 'd';
-                                                $bind[18]['value'] = $sd['bids'][2][1];
-                                                $bind[19]['type'] = 'd';
-                                                $bind[19]['value'] = $sd['bids'][3][0];
-                                                $bind[20]['type'] = 'd';
-                                                $bind[20]['value'] = $sd['bids'][3][1];
-                                                $bind[21]['type'] = 'd';
-                                                $bind[21]['value'] = $sd['bids'][4][0];
-                                                $bind[22]['type'] = 'd';
-                                                $bind[22]['value'] = $sd['bids'][4][1];
-                                                $ins = $DB->insert($sql, $bind);                                        
-                                                //Log::systemLog('debug',"Process type \"Price Monitor\" spot DATA ".$exchange_name.' '. json_encode($bind));
-                                            }
-                                            else {
-                                                Log::systemLog('warn',"Process type \"Price Monitor\" spot DATA ".$exchange_name.' price timestamp very old');
-                                            }
-                                        }
+                                        $pair_time = DateTime::createFromFormat('U.u', number_format($tmp,3,".",""), new DateTimeZone('UTC'));
+                                        $bind[1]['type'] = 's';
+                                        $bind[1]['value'] = $pair_time->format('Y-m-d H:i:s.u');
+                                        $bind[2]['type'] = 'i';
+                                        $bind[2]['value'] = $p;
+                                        $bind[3]['type'] = 'd';
+                                        $bind[3]['value'] = $q['asks'][4][0];
+                                        $bind[4]['type'] = 'd';
+                                        $bind[4]['value'] = $q['asks'][4][1];
+                                        $bind[5]['type'] = 'd';
+                                        $bind[5]['value'] = $q['asks'][3][0];
+                                        $bind[6]['type'] = 'd';
+                                        $bind[6]['value'] = $q['asks'][3][1];
+                                        $bind[7]['type'] = 'd';
+                                        $bind[7]['value'] = $q['asks'][2][0];
+                                        $bind[8]['type'] = 'd';
+                                        $bind[8]['value'] = $q['asks'][2][1];
+                                        $bind[9]['type'] = 'd';
+                                        $bind[9]['value'] = $q['asks'][1][0];
+                                        $bind[10]['type'] = 'd';
+                                        $bind[10]['value'] = $q['asks'][1][1];
+                                        $bind[11]['type'] = 'd';
+                                        $bind[11]['value'] = $q['asks'][0][0];
+                                        $bind[12]['type'] = 'd';
+                                        $bind[12]['value'] = $q['asks'][0][1];
+                                        $bind[13]['type'] = 'd';
+                                        $bind[13]['value'] = $q['bids'][0][0];
+                                        $bind[14]['type'] = 'd';
+                                        $bind[14]['value'] = $q['bids'][0][1];
+                                        $bind[15]['type'] = 'd';
+                                        $bind[15]['value'] = $q['bids'][1][0];
+                                        $bind[16]['type'] = 'd';
+                                        $bind[16]['value'] = $q['bids'][1][1];
+                                        $bind[17]['type'] = 'd';
+                                        $bind[17]['value'] = $q['bids'][2][0];
+                                        $bind[18]['type'] = 'd';
+                                        $bind[18]['value'] = $q['bids'][2][1];
+                                        $bind[19]['type'] = 'd';
+                                        $bind[19]['value'] = $q['bids'][3][0];
+                                        $bind[20]['type'] = 'd';
+                                        $bind[20]['value'] = $q['bids'][3][1];
+                                        $bind[21]['type'] = 'd';
+                                        $bind[21]['value'] = $q['bids'][4][0];
+                                        $bind[22]['type'] = 'd';
+                                        $bind[22]['value'] = $q['bids'][4][1];
+                                        $ins = $DB->insert($sql, $bind);                                        
+                                        //Log::systemLog('debug',"Process type \"Price Monitor\" spot DATA BIND ". json_encode($bind));
+                                    }
+                                    else {
+                                        Log::systemLog('warn',"Process type \"Price Monitor\" spot DATA price timestamp very old ". json_encode($q));
                                     }
                                 }
                             }
@@ -669,6 +687,7 @@ class ctdaemon {
                         }
                     }
                     //Log::systemLog('debug',"Process type \"Price Monitor\" WRITE INTO DB".(microtime(true)-$start_time));
+                    //Log::systemLog('debug',"Process type \"Price Monitor\" DATA". json_encode($spot_data));
                 }
             }
          
