@@ -872,13 +872,15 @@ class ctdaemon {
             //Update tree
             $this->updateProcTree();
             
-            //Update data timer
+            //Update trader's data 
             $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
             if($update) {
                 $trader->timer_update_data_ts = microtime(true)*1E6;
                 //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
-                
+                $trader->updateTrader();
             }
+            
+            //Check status last arbitrage transaction
             
             
             usleep(1000);

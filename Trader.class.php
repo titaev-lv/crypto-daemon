@@ -9,14 +9,15 @@ class Trader {
     private $max_amount_trade = 0;
     private $fin_protection = false;
     
-    public $pool = array();
+    private $pool = array();
     
-    public $timer_update_data = 30*1E6;
+    public $timer_update_data = 60*1E6;
     public $timer_update_data_ts = 0;
+    private $limit_count_negative_trans = 3;
+    private $count_negative_trans = 0;
     
     function __construct($trader_id) {
         global $DB;
-        
         $this->timer_update_data_ts = microtime(true)*1E6;
         
         $this->trader_id = (int)$trader_id;
@@ -68,10 +69,10 @@ class Trader {
             foreach ($tri as $t) {
                 $key = hash('xxh3',$t['ACCOUNT_ID'].'|'.$t['MARKET'].'|'.$t['PAIR_ID']);
                 $obj = new TraderInstance($this->trader_id, $t['ACCOUNT_ID'], $t['MARKET'], $t['PAIR_ID']);
-                $this->pool[$key] = $obj;
+                $this->pushObjectPoolTraderInstace($key, $obj);
             }
         }
-        Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool));
+        //Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool));
         //
     }
     public function updateTrader() {
@@ -89,7 +90,7 @@ class Trader {
         $bind[0]['value'] = $this->trader_id;
         $tr = $DB->select($sql, $bind); 
         if(!$tr && !empty($DB->getLastError())) {
-            $message = "ERROR select Trader data from DB step2. ".$DB->getLastError();
+            $message = "ERROR select Trader update data from DB. ".$DB->getLastError();
             Log::systemLog('error', $message, "Trader");
             return false;
         }
@@ -99,6 +100,24 @@ class Trader {
             $this->fin_protection = (isset($tr[0]['FIN_PROTECTION'])) ? (bool)$tr[0]['FIN_PROTECTION'] : false;
         }
         
+        //Select data for update TraderInstances
+        if(!empty($this->pool)) {
+            //update
+            foreach(array_keys($this->pool) as $key) {
+                $tr_ins = $this->fetchObjectPoolTraderInstace($key);
+                $tr_ins->updateData();
+                $this->pushObjectPoolTraderInstace($key, $tr_ins);
+            }  
+        }
+
+        //Log::systemLog('debug', 'POOL UPDATE proc='. getmypid().' '.json_encode($this->pool));
+        return true;
+    }
+    public function fetchObjectPoolTraderInstace($id) {
+        return (isset($this->pool[$id])) ? $this->pool[$id] : false;
+    }
+    public function pushObjectPoolTraderInstace($id,$obj) {
+        $this->pool[$id] = $obj;
         return true;
     }
 }

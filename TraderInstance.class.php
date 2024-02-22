@@ -2,6 +2,7 @@
 
 class TraderInstance {
     public $instance_id = 0;
+    private $trader_id = 0;
     public $user_id = 0;
         
     public $account_id = 0;
@@ -24,6 +25,7 @@ class TraderInstance {
             
     function __construct($trader_id, $account_id, $market, $pair_id) {
         global $DB;
+        $this->trader_id = $trader_id;
 
         $sql = "SELECT 
                     ea.ID AS ACCOUNT_ID,
@@ -87,4 +89,47 @@ class TraderInstance {
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
         }
     }
+    
+    public function updateData() {
+        global $DB;
+        $sql = "SELECT 
+                    tsa.MIN_DELTA_PROFIT_SELL AS MIN_DELTA_PROFIT_SELL,
+                    tsa.CHAIN_SEND_OUT AS CHAIN_SEND_OUT,
+                    stpf.TAKER_FEE AS TAKER_FEE,
+                    stpf.MAKER_FEE AS MAKER_FEE
+                FROM 
+                    TRADE_SPOT_ARRAYS tsa
+                INNER JOIN
+                    TRADE tr ON tr.ID = tsa.TRADE_ID
+                LEFT JOIN 
+                    EXCHANGE_ACCOUNTS ea ON ea.ID = tsa.EAID
+                LEFT JOIN 
+                    EXCHANGE e ON e.ID = ea.EXID 
+                LEFT JOIN 
+                    SPOT_TRADE_PAIR stp ON stp.ID = tsa.PAIR_ID
+                LEFT JOIN 
+                    SPOT_TRADE_PAIR_FEE stpf ON stpf.TRADE_PAIR_ID = stp.ID AND stpf.EAID = ea.ID
+                WHERE 
+                    ea.`ID` = ? AND  tsa.`PAIR_ID` = ? AND tr.ID = ?";
+        $bind = array();
+        $bind[0]['type'] = 'i';
+        $bind[0]['value'] = $this->account_id;
+        $bind[1]['type'] = 'i';
+        $bind[1]['value'] = $this->pair_id;
+        $bind[2]['type'] = 'i';
+        $bind[2]['value'] = $this->trader_id;
+        $tri = $DB->select($sql, $bind); 
+        if(!$tri && !empty($DB->getLastError())) {
+            $message = "ERROR select update data in Trader Instanse from DB. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        if(!empty($tri)) {
+            $tr = $tri[0];
+            $this->taker_fee = $tr['TAKER_FEE'];
+            $this->maker_fee = $tr['MAKER_FEE'];
+            $this->min_delta_profit_sell = $tr['MIN_DELTA_PROFIT_SELL'];
+            $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
+        }
+    }  
 }
