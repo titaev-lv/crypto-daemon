@@ -12,6 +12,7 @@ require_once __DIR__.'/OrderBook.class.php';
 require_once __DIR__.'/PriceLog.class.php';
 require_once __DIR__.'/Service.class.php';
 require_once __DIR__.'/Trader.class.php';
+require_once __DIR__.'/TraderInstance.class.php';
 require_once __DIR__.'/OrderAndTransaction.class.php';
 require_once __DIR__.'/TradeWorker.class.php';
 //Database

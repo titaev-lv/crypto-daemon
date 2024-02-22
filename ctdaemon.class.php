@@ -617,7 +617,7 @@ class ctdaemon {
                                     $tmp = $q['timestamp']*1E-6;
                                     //Log::systemLog('debug',"TIMESTAMP ". $tmp);
                                     //Log::systemLog('debug',"TIMESTAMP NOW ". microtime(true));
-                                    Log::systemLog('debug',"DELTA TIME ". (microtime(true) - $tmp));
+                                    //Log::systemLog('debug',"DELTA TIME ". (microtime(true) - $tmp));
                                     if((microtime(true) - $tmp) < 4.5) {
                                         $sql = 'INSERT INTO `PRICE_SPOT_LOG` (
                                                      `DATE`,
@@ -847,30 +847,41 @@ class ctdaemon {
     }
     private function runProcTrader() {
         global $DB;
+        
+        //Trader must run after run all system's processes
+        sleep(2);
+        
         $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
-        usleep(20000);
-        
-        $trader = new Trader();
-        
         Log::systemLog('info',"Process type \"Trader\" STARTED pid=".getmypid(), "Trader");
         $this->proc = array();
 
+        //Read RAM
         do {
             $task_create_trader = ServiceRAM::read('create_trader');
         }
-        while($task_create_trader === false || empty($task_create_trader));
+        while($task_create_trader === false || empty($task_create_trader));        
         Log::systemLog('debug', 'Process "Trader" pid='. getmypid().' received = '.json_encode($task_create_trader), "Trader");
+        $tr_id = $task_create_trader[0]['data']['trade_id'];
         
-        $trader->trader_id = $task_create_trader[0]['data']['trade_id'];
+        //Create object and init all data
+        $trader = new Trader($tr_id);
+        //Log::systemLog('debug', 'TRADER pid='. getmypid().' CLASSDATA = '.$trader->chain_transfer, "Trader");
         
         while(1) {
             $this->timestamp = microtime(true)*1E6;           
             //Update tree
             $this->updateProcTree();
             
+            //Update data timer
+            $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
+            if($update) {
+                $trader->timer_update_data_ts = microtime(true)*1E6;
+                //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
+                
+            }
             
             
-            sleep(1);
+            usleep(1000);
         }
         
     }

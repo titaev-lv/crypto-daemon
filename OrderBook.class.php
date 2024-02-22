@@ -20,7 +20,7 @@ class OrderBook {
     private $need_reconnect_flag = false;
     
     function __construct() {
-        $this->timer_update_ob_ping = microtime(true)*1E6;
+        $this->timer_update_ob_ping_ts = microtime(true)*1E6;
     }
         
     public function eraseDepthRAM () {
