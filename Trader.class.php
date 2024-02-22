@@ -3,6 +3,7 @@
 class Trader {
     
     public $trader_id = 0;
+    private $status = 1;
     private $trader_user_id = 0;
     public $trader_type = 0;
     private $min_delta_profit = 0;          //Minimum profit
@@ -14,7 +15,6 @@ class Trader {
     public $timer_update_data = 60*1E6;
     public $timer_update_data_ts = 0;
     private $limit_count_negative_trans = 3;
-    private $count_negative_trans = 0;
     
     function __construct($trader_id) {
         global $DB;
@@ -119,5 +119,57 @@ class Trader {
     public function pushObjectPoolTraderInstace($id,$obj) {
         $this->pool[$id] = $obj;
         return true;
+    }
+    public function getLastArbTransStatus() {
+        global $DB;
+        $sql = "SELECT 
+                    atr2.STATUS
+                FROM 
+                    ARBITRAGE_TRANS atr2
+                WHERE 
+                    atr2.ID = (
+                        SELECT
+                            max(atr.id) AS ID
+                        FROM
+                            ARBITRAGE_TRANS atr
+                        WHERE
+                            atr.TRADE_ID = ?
+                    )";
+        $bind = array();
+        $bind[0]['type'] = 'i';
+        $bind[0]['value'] = $this->trader_id;
+        $trans = $DB->select($sql, $bind); 
+        if(!$trans && !empty($DB->getLastError())) {
+            $message = "ERROR select Arbitrage transaction from DB. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        
+        $status = (int)$trans[0]['STATUS'];
+        return $status;
+    }
+    public function checkOverflowCountLossArbTrans() {
+        global $DB;
+        $sql = "SELECT 
+                    COUNT(*) AS COUNT
+                FROM 
+                    ARBITRAGE_TRANS atr
+                WHERE 
+                    atr.STATUS = 6 
+                    AND atr.TRADE_ID = ?";
+        $bind = array();
+        $bind[0]['type'] = 'i';
+        $bind[0]['value'] = $this->trader_id;
+        $count = $DB->select($sql, $bind); 
+        if(!$count && !empty($DB->getLastError())) {
+            $message = "ERROR select count loss Arbitrage transaction from DB. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        $c = (int) $count[0]['COUNT'];
+        if($c >= $this->limit_count_negative_trans) {
+            return true;
+        }
+        return false;
     }
 }

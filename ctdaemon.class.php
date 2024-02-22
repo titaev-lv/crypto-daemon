@@ -868,7 +868,8 @@ class ctdaemon {
         //Log::systemLog('debug', 'TRADER pid='. getmypid().' CLASSDATA = '.$trader->chain_transfer, "Trader");
         
         while(1) {
-            $this->timestamp = microtime(true)*1E6;           
+            $this->timestamp = microtime(true)*1E6; 
+            $continue = false; //algorithm flag
             //Update tree
             $this->updateProcTree();
             
@@ -880,8 +881,29 @@ class ctdaemon {
                 $trader->updateTrader();
             }
             
-            //Check status last arbitrage transaction
+            //Check status last arbitrage transaction (return integer)
+            $arb_status = $trader->getLastArbTransStatus();
+            //Log::systemLog('debug', 'ARBSTATUS pid='. $arb_status.'', "Trader");
+            switch($arb_status) {
+                case 4:
+                    sleep(1);
+                    break;
+                case 6:
+                    ($trader->checkOverflowCountLossArbTrans()) ? sleep(1) : $continue = true;
+                   break;
+                default:
+                    $continue = true;
+            }
             
+            //Calculate position
+            if($continue) {
+                
+            }
+            
+            //Prepare arbitrage transaction
+            if($continue) {
+                
+            }
             
             usleep(1000);
         }
