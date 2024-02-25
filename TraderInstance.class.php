@@ -20,6 +20,10 @@ class TraderInstance {
     
     public $taker_fee = 0;
     public $maker_fee = 0;
+    public $min_order_amount = 0;
+    public $min_order_quote_amount = 0;
+    public $step_price = 0;
+    public $step_volume = 0;
     public $start_amount_base = 0;
     public $start_amount_quote = 0;
     public $min_delta_profit_sell = 0;
@@ -47,7 +51,11 @@ class TraderInstance {
                     tsa.CHAIN_SEND_OUT AS CHAIN_SEND_OUT,
                     'spot' AS MARKET,
                     stpf.TAKER_FEE AS TAKER_FEE,
-                    stpf.MAKER_FEE AS MAKER_FEE
+                    stpf.MAKER_FEE AS MAKER_FEE,
+                    stp.MIN_ORDER_AMOUNT,
+                    stp.MIN_ORDER_QUOTE_AMOUNT,
+                    stp.STEP_PRICE,
+                    stp.STEP_VOLUME
                 FROM 
                     TRADE_SPOT_ARRAYS tsa
                 INNER JOIN
@@ -93,10 +101,15 @@ class TraderInstance {
             
             $this->taker_fee = $tr['TAKER_FEE'];
             $this->maker_fee = $tr['MAKER_FEE'];
+            $this->min_order_amount = $tr['MIN_ORDER_AMOUNT'];
+            $this->min_order_quote_amount = $tr['MIN_ORDER_QUOTE_AMOUNT'];
+            $this->step_price = $tr['STEP_PRICE'];
+            $this->step_volume = $tr['STEP_VOLUME'];
             $this->start_amount_base = $tr['START_AMOUNT_BASE'];
             $this->start_amount_quote = $tr['START_AMOUNT_QUOTE'];
             $this->min_delta_profit_sell = $tr['MIN_DELTA_PROFIT_SELL'];
             $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
+            
             
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
             
