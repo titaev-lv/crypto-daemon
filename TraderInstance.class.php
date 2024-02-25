@@ -13,6 +13,10 @@ class TraderInstance {
     public $market = '';
     public $pair_id = 0;
     public $pair_name = '';
+    private $base_currency_id = 0;
+    private $base_currency_name = '';
+    private $quote_currency_id = 0;
+    private $quote_currency_name = 0;
     
     public $taker_fee = 0;
     public $maker_fee = 0;
@@ -22,6 +26,9 @@ class TraderInstance {
     public $chain_send_out = false;
     
     public $orderbook = array();
+    
+    public $deposit = array();
+    public $withdrawal = array();
             
     function __construct($trader_id, $account_id, $market, $pair_id) {
         global $DB;
@@ -78,6 +85,11 @@ class TraderInstance {
             $this->market = $tr['MARKET'];
             $this->pair_id = $tr['PAIR_ID'];
             $this->pair_name = Exchange::detectNamesPair($this->pair_id);
+            $pair_arr = explode("/", $this->pair_name);
+            $this->base_currency_name = $pair_arr[0];
+            $this->quote_currency_name = $pair_arr[1];
+            $this->base_currency_id = Exchange::detectCoinIdByName($this->base_currency_name, $this->exchange_id);
+            $this->quote_currency_id = Exchange::detectCoinIdByName($this->quote_currency_name, $this->exchange_id);
             
             $this->taker_fee = $tr['TAKER_FEE'];
             $this->maker_fee = $tr['MAKER_FEE'];
@@ -87,6 +99,83 @@ class TraderInstance {
             $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
             
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
+            
+            //get data by chains for deposit and withdrawal
+            $sql = "SELECT
+                        d.COIN_ID,
+                        d.CHAIN_ID AS CHAIN_ID,
+                        c.NAME AS CHAIN_NAME
+                    FROM
+                        DEPOSIT d
+                    INNER JOIN 
+                        `CHAIN` c ON d.CHAIN_ID = c.ID 
+                    WHERE
+                        (d.COIN_ID = ? OR d.COIN_ID = ?)
+                        AND d.EXID = ?
+                        AND d.ACTIVE = 1
+                        AND c.ACTIVE = 1";
+            $bind = array();
+            $bind[0]['type'] = 'i';
+            $bind[0]['value'] = $this->base_currency_id;
+            $bind[1]['type'] = 'i';
+            $bind[1]['value'] = $this->quote_currency_id;
+            $bind[2]['type'] = 'i';
+            $bind[2]['value'] = $this->exchange_id;
+            $deposit = $DB->select($sql, $bind); 
+            if(!$deposit && !empty($DB->getLastError())) {
+                $message = "ERROR select data deposit in Trader Instanse from DB. ".$DB->getLastError();
+                Log::systemLog('error', $message, "Trader");
+                return false;
+            }
+            if(!empty($deposit)) {
+                foreach ($deposit as $dep) {
+                    $tmp = array();
+                    $tmp['coin_id'] = $dep['COIN_ID'];
+                    $tmp['chain_id'] = $dep['CHAIN_ID'];
+                    $tmp['chain_name'] = $dep['CHAIN_NAME'];
+                    $this->deposit[] = $tmp;
+                }
+            }
+            
+            $sql = "SELECT 
+                        w.COIN_ID,
+                        w.CHAIN_ID AS CHAIN_ID,
+                        c.NAME AS CHAIN_NAME,
+                        w.FEE AS FEE,
+                        w.FEE_PERCENT AS FEE_PERCENT
+                    FROM 
+                        WITHDRAWAL w 
+                    INNER JOIN 
+                        `CHAIN` c ON w.CHAIN_ID = c.ID	
+                    WHERE 
+                        (w.COIN_ID = ? OR w.COIN_ID = ?)
+                        AND w.EXID = ?
+                        AND w.ACTIVE = 1
+                        AND c.ACTIVE = 1";
+            $bind = array();
+            $bind[0]['type'] = 'i';
+            $bind[0]['value'] = $this->base_currency_id;
+            $bind[1]['type'] = 'i';
+            $bind[1]['value'] = $this->quote_currency_id;
+            $bind[2]['type'] = 'i';
+            $bind[2]['value'] = $this->exchange_id;
+            $withdrawal = $DB->select($sql, $bind); 
+            if(!$withdrawal && !empty($DB->getLastError())) {
+                $message = "ERROR select data withdrawal deposit in Trader Instanse from DB. ".$DB->getLastError();
+                Log::systemLog('error', $message, "Trader");
+                return false;
+            }
+            if(!empty($withdrawal)) {
+                foreach ($withdrawal as $w) {
+                    $tmp = array();
+                    $tmp['coin_id'] = $w['COIN_ID'];
+                    $tmp['chain_id'] = $w['CHAIN_ID'];
+                    $tmp['chain_name'] = $w['CHAIN_NAME'];
+                    $tmp['chain_fee'] = $w['FEE'];
+                    $tmp['chain_fee_percent'] = $w['FEE_PERCENT'];
+                    $this->withdrawal[] = $tmp;
+                }
+            }
         }
     }
     

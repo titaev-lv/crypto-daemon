@@ -72,7 +72,7 @@ class Trader {
                 $this->pushObjectPoolTraderInstace($key, $obj);
             }
         }
-        //Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool));
+        Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool));
         //
     }
     public function updateTrader() {
@@ -122,6 +122,8 @@ class Trader {
     }
     public function getLastArbTransStatus() {
         global $DB;
+        $status = 0;
+        
         $sql = "SELECT 
                     atr2.STATUS
                 FROM 
@@ -144,8 +146,12 @@ class Trader {
             Log::systemLog('error', $message, "Trader");
             return false;
         }
-        
-        $status = (int)$trans[0]['STATUS'];
+        if(empty($trans)) {
+            $status = 0;
+        }
+        else {
+            $status = (int)$trans[0]['STATUS'];
+        }
         return $status;
     }
     public function checkOverflowCountLossArbTrans() {
