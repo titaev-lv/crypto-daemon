@@ -745,7 +745,7 @@ class ctdaemon {
                                 if((microtime(true)*1E6 - $proc['timestamp'])*1E-6 > 9) {
                                     $trader_exist_flag = false;
                                     Log::systemLog('error', 'Proc='.$proc['pid'].' Traader NOT RESPONSE more 9 seconds.', "Trade Monitor");
-                                    $kill = posix_kill($this->proc[$k], SIGTERM);
+                                    $kill = posix_kill($this->proc[$k]['pid'], SIGTERM);
                                     unset($this->proc[$k]);
                                     if(!empty($this->proc_tree)) {   
                                         foreach($this->proc_tree as $k2=>$proc2) {
@@ -922,7 +922,7 @@ class ctdaemon {
                     //Read Order Book data for all TradeInstance
                     
                 }
-                while($trade === true);
+                while($trade_allow === true);
             }
             
             Log::systemLog('debug', 'ARBID id='. $trader->arbitrage_id.'', "Trader");
