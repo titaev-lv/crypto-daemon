@@ -847,7 +847,6 @@ class ctdaemon {
     }
     private function runProcTrader() {
         global $DB;
-        
         //Trader must run after run all system's processes
         sleep(2);
         
@@ -866,6 +865,7 @@ class ctdaemon {
         //Create object and init all data
         $trader = new Trader($tr_id);
         //Log::systemLog('debug', 'TRADER pid='. getmypid().' CLASSDATA = '.$trader->chain_transfer, "Trader");
+        $trader->trader_status = 1;
         
         while(1) {
             $this->timestamp = microtime(true)*1E6; 
@@ -882,14 +882,21 @@ class ctdaemon {
             }
             
             //Check status last arbitrage transaction (return integer)
-            $arb_status = $trader->getLastArbTransStatus();
+            $arb_last_status = $trader->getLastArbTransStatus();
             //Log::systemLog('debug', 'ARBSTATUS pid='. $arb_status.'', "Trader");
-            switch($arb_status) {
+            switch($arb_last_status) {
                 case 4:
+                    $trader->trader_status = 20;
                     sleep(1);
                     break;
                 case 6:
-                    ($trader->checkOverflowCountLossArbTrans()) ? sleep(1) : $continue = true;
+                    if ($trader->checkOverflowCountLossArbTrans()) {
+                        $trader->trader_status = 30;
+                        sleep(1);
+                    }
+                    else {
+                        $continue = true;
+                    }
                    break;
                 default:
                     $continue = true;
@@ -901,11 +908,29 @@ class ctdaemon {
             }
             
             //Prepare arbitrage transaction
-            if($continue) {
-                
+            if($continue && $trader->arbitrage_id == 0) {
+                $arb_id = $trader->prepareArbitrageTrans();
+                if(!$arb_id) {
+                    $continue = false; 
+                }
             }
             
-            usleep(1000);
+            //Analyze
+            if($continue) {
+                $trade_allow = false;
+                do {
+                    //Read Order Book data for all TradeInstance
+                    
+                }
+                while($trade === true);
+            }
+            
+            Log::systemLog('debug', 'ARBID id='. $trader->arbitrage_id.'', "Trader");
+            
+            //reset arbitrage transaction
+            //$trader->arbitrage_id = 0;
+            
+            sleep(60);
         }
         
     }
@@ -1545,6 +1570,9 @@ class ctdaemon {
             Log::systemLog('error', $message, "Main");
             exit($message.PHP_EOL);
         }
+        //Set ARBITRAGE TRANSACTION new status to suspend
+        $sql = "UPDATE `ARBITRAGE_TRANS` SET `STATUS`=3 WHERE `STATUS`=1";
+        $DB->sql_not_need_prepared($sql);
         unset($DB);
         $this->db_engine = $conf['db_engine'];
         $this->db_credentials = $credentials;

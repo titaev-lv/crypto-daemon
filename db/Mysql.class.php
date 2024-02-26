@@ -167,7 +167,7 @@ class MySQL implements DbInterface {
         return $r;
     }
     public function getLastID() {
-        $this->check_connection();
+        //$this->check_connection();
         return mysqli_insert_id($this->conn);
     }
     public function sql_not_need_prepared ($sql) {

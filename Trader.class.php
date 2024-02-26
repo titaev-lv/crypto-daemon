@@ -1,15 +1,21 @@
 <?php
 
 class Trader {
-    
     public $trader_id = 0;
-    private $status = 1;
+    public $trader_status = 0;
+    /* 0 - process started
+     * 1 - ready to trade
+     * 
+     * 20 - Error
+     * 30 - High loss
+    */
     private $trader_user_id = 0;
     public $trader_type = 0;
     private $min_delta_profit = 0;          //Minimum profit
     private $max_amount_trade = 0;
     private $fin_protection = false;
     
+    public $arbitrage_id = 0;
     private $pool = array();
     
     public $timer_update_data = 60*1E6;
@@ -177,5 +183,40 @@ class Trader {
             return true;
         }
         return false;
+    }
+    public function prepareArbitrageTrans() {
+        global $DB;
+        $DB->startTransaction();
+        if(!empty($DB->getLastError())) {
+            $message = "ERROR start Arbitrage transaction. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        $sql = "INSERT INTO ARBITRAGE_TRANS (TRADE_ID, STATUS) VALUES(?, 1)";
+        $bind = array();
+        $bind[0]['type'] = 'i';
+        $bind[0]['value'] = $this->trader_id;
+        $ins = $DB->insert($sql,$bind);
+        if($ins === false || $ins == 0 || $DB->getLastError()) {
+            $DB->rollbackTransaction();
+            $message = "ERROR insert Arbitrage transaction in DB. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        $arb_id = $DB->getLastID();
+        if(!$arb_id) {
+            $DB->rollbackTransaction();
+            $message = "ERROR get ID Arbitrage transaction from DB. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        $DB->commitTransaction();
+        if(!empty($DB->getLastError())) {
+            $message = "ERROR commit transaction of Arbitrage transaction. ".$DB->getLastError();
+            Log::systemLog('error', $message, "Trader");
+            return false;
+        }
+        $this->arbitrage_id = $arb_id;
+        return $arb_id;
     }
 }
