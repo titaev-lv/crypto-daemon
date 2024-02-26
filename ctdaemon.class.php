@@ -395,8 +395,8 @@ class ctdaemon {
                         foreach($ob->subscribe as $k=>$s) {
                             if(!isset($s['ftok_crc']) || empty($s['ftok_crc'])) {
                                 // Exchange ID | Market (spot) | PAIR ID
-                                //Log::systemLog('debug', 'STRING CRC '.$ob->exchange_id.'|'.$ob->market.'|'.$s['id'], "Order Book");
                                 $ob->subscribe[$k]['ftok_crc'] = hash('xxh3',$ob->exchange_id.'|'.$ob->market.'|'.$s['id']);
+                                //Log::systemLog('debug', 'STRING CRC '.$ob->exchange_id.'|'.$ob->market.'|'.$s['id'].' '. $ob->subscribe[$k]['ftok_crc'], "Order Book");
                             }
                         }
                         //Log::systemLog('debug', 'PROC SUBSCRIBE '. getmypid().' '. json_encode($ob->subscribe), "Order Book");
@@ -919,18 +919,26 @@ class ctdaemon {
             if($continue) {
                 $trade_allow = false;
                 do {
-                    //Read Order Book data for all TradeInstance
+                    //This for keep alive process
+                    $this->timestamp = microtime(true)*1E6;
+                    $this->updateProcTree();
                     
+                    //Read Order Book data for all TradeInstance. Read 20-65us at 6 trade proc
+                    //$start = microtime(true);
+                    $trader->readOrderBooks();                   
+                    //$stop = microtime(true) - $start;
+                    //Log::systemLog('debug', 'OBREAD '. $stop, "Trader");
+                    
+                    
+                    usleep(1000);
                 }
-                while($trade_allow === true);
+                while($trade_allow !== true);
             }
-            
-            Log::systemLog('debug', 'ARBID id='. $trader->arbitrage_id.'', "Trader");
-            
+
             //reset arbitrage transaction
             //$trader->arbitrage_id = 0;
             
-            sleep(60);
+            sleep(5);
         }
         
     }

@@ -78,7 +78,7 @@ class Trader {
                 $this->pushObjectPoolTraderInstace($key, $obj);
             }
         }
-        Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool));
+        //Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool));
         //
     }
     public function updateTrader() {
@@ -218,5 +218,18 @@ class Trader {
         }
         $this->arbitrage_id = $arb_id;
         return $arb_id;
+    }
+    public function readOrderBooks() {
+        if(!empty($this->pool)) {
+            foreach ($this->pool as $k=>$v) {
+                $inst_obj = $this->fetchObjectPoolTraderInstace($k);
+                $ob_read = $inst_obj->readOrderBook();
+                if($ob_read) {
+                    $this->pushObjectPoolTraderInstace($k, $inst_obj);
+                }
+            }
+        }
+        Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool), "Trader");
+        return true;
     }
 }

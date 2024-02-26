@@ -30,6 +30,7 @@ class TraderInstance {
     public $chain_send_out = false;
     
     public $orderbook = array();
+    private $orderbook_address = '';
     
     public $deposit = array();
     public $withdrawal = array();
@@ -109,9 +110,9 @@ class TraderInstance {
             $this->start_amount_quote = $tr['START_AMOUNT_QUOTE'];
             $this->min_delta_profit_sell = $tr['MIN_DELTA_PROFIT_SELL'];
             $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
-            
-            
+
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
+            $this->orderbook_address = hash('xxh3',$this->exchange_id.'|'.$this->market.'|'.$this->pair_id);
             
             //get data by chains for deposit and withdrawal
             $sql = "SELECT
@@ -234,4 +235,9 @@ class TraderInstance {
             $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
         }
     }  
+    public function readOrderBook() {
+        $ob = OrderBook::readDepthRAM($this->orderbook_address);
+        $this->orderbook = $ob;
+        return true;
+    }
 }
