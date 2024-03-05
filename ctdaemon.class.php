@@ -618,7 +618,7 @@ class ctdaemon {
                                     //Log::systemLog('debug',"TIMESTAMP ". $tmp);
                                     //Log::systemLog('debug',"TIMESTAMP NOW ". microtime(true));
                                     //Log::systemLog('debug',"DELTA TIME ". (microtime(true) - $tmp));
-                                    if((microtime(true) - $tmp) < 4.5) {
+                                    if((microtime(true) - $tmp) < 5) {
                                         $sql = 'INSERT INTO `PRICE_SPOT_LOG` (
                                                      `DATE`,
                                                      `PRICE_TIMESTAMP`,
@@ -679,7 +679,11 @@ class ctdaemon {
                                         //Log::systemLog('debug',"Process type \"Price Monitor\" spot DATA BIND ". json_encode($bind));
                                     }
                                     else {
-                                        Log::systemLog('warn',"Process type \"Price Monitor\" spot DATA price timestamp very old ". json_encode($q));
+                                        $tmp = (int)$tmp;
+                                        $do = new DateTime('now', new DateTimeZone('UTC'));
+                                        $d = date_timestamp_set($do,$tmp);
+                                        
+                                        Log::systemLog('warn',"Process type \"Price Monitor\" spot DATA price timestamp very old ".$tmp. ' '.$d->format("Y-m-d H:i:s.u").' '. json_encode($q));
                                     }
                                 }
                             }
@@ -928,9 +932,9 @@ class ctdaemon {
                     $trader->readOrderBooks();                   
                     //$stop = microtime(true) - $start;
                     //Log::systemLog('debug', 'OBREAD '. $stop, "Trader");
+                    $trader->calculateType_1();
                     
-                    
-                    usleep(1000);
+                    usleep(10000);
                 }
                 while($trade_allow !== true);
             }

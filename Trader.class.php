@@ -11,8 +11,7 @@ class Trader {
     */
     private $trader_user_id = 0;
     public $trader_type = 0;
-    private $min_delta_profit = 0;          //Minimum profit
-    private $max_amount_trade = 0;
+    private $max_amount_trade = "0";
     private $fin_protection = false;
     
     public $arbitrage_id = 0;
@@ -30,7 +29,6 @@ class Trader {
         $sql = "SELECT 
                     `UID`, 
                     `TYPE`,
-                    `MIN_DELTA_PROFIT`, 
                     `MAX_AMOUNT_TRADE`,
                     `FIN_PROTECTION`
                 FROM 
@@ -48,9 +46,8 @@ class Trader {
         }
         if(is_array($tr)) {
             $this->trader_user_id = (isset($tr[0]['UID'])) ? intval($tr[0]['UID']) : 0;
-            $this->trader_type = (isset($tr[0]['TYPE'])) ? intval($tr[0]['TYPE']) : 0;
-            $this->min_delta_profit = (isset($tr[0]['MIN_DELTA_PROFIT'])) ? $tr[0]['MIN_DELTA_PROFIT'] : 0;            
-            $this->max_amount_trade = (isset($tr[0]['MAX_AMOUNT_TRADE']) && !empty($tr[0]['MAX_AMOUNT_TRADE'])) ? $tr[0]['MAX_AMOUNT_TRADE'] : NULL;
+            $this->trader_type = (isset($tr[0]['TYPE'])) ? intval($tr[0]['TYPE']) : 0;           
+            $this->max_amount_trade = (isset($tr[0]['MAX_AMOUNT_TRADE']) && !empty($tr[0]['MAX_AMOUNT_TRADE'])) ? (float)$tr[0]['MAX_AMOUNT_TRADE'] : 0.00;
             $this->fin_protection = (isset($tr[0]['FIN_PROTECTION'])) ? (bool)$tr[0]['FIN_PROTECTION'] : false;
         }
         //Select data for create TraderInstances
@@ -84,7 +81,6 @@ class Trader {
     public function updateTrader() {
         global $DB;
         $sql = "SELECT 
-                    `MIN_DELTA_PROFIT`, 
                     `MAX_AMOUNT_TRADE`,
                     `FIN_PROTECTION`
                 FROM 
@@ -100,9 +96,8 @@ class Trader {
             Log::systemLog('error', $message, "Trader");
             return false;
         }
-        if(is_array($tr)) {
-            $this->min_delta_profit = (isset($tr[0]['MIN_DELTA_PROFIT'])) ? $tr[0]['MIN_DELTA_PROFIT'] : 0;            
-            $this->max_amount_trade = (isset($tr[0]['MAX_AMOUNT_TRADE']) && !empty($tr[0]['MAX_AMOUNT_TRADE'])) ? $tr[0]['MAX_AMOUNT_TRADE'] : NULL;
+        if(is_array($tr)) {           
+            $this->max_amount_trade = (isset($tr[0]['MAX_AMOUNT_TRADE']) && !empty($tr[0]['MAX_AMOUNT_TRADE'])) ? (float)$tr[0]['MAX_AMOUNT_TRADE'] : 0.00;
             $this->fin_protection = (isset($tr[0]['FIN_PROTECTION'])) ? (bool)$tr[0]['FIN_PROTECTION'] : false;
         }
         
@@ -229,7 +224,198 @@ class Trader {
                 }
             }
         }
-        Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool), "Trader");
+        //Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool), "Trader");
         return true;
+    }
+    public function calculateType_1() {
+        $pairs = array();
+        $deltas = array();
+        //Detect all pairs
+        if(!empty($this->pool) && count($this->pool) > 1) {
+            //вытягиваем в массив 
+            $tmp = array();
+            foreach ($this->pool as $k=>$v) {
+                $tmp[] = $k;
+                foreach ($this->pool as $n=>$m) {
+                    if(in_array($n, $tmp) && $n !== $k) {
+                        $t = array();
+                        $t[] = $k;
+                        $t[] = $n;
+                        $pairs[] = $t;
+                        unset($t);
+                    }
+                }
+            }
+            unset($tmp);
+        }
+  // Log::systemLog('warn', 'POOL'. json_encode($this->pool), "Trader");        
+        if(!empty($pairs)) {
+            foreach ($pairs as $p) {
+                $sell = $this->fetchObjectPoolTraderInstace($p[0]);
+                $buy = $this->fetchObjectPoolTraderInstace($p[1]);
+                
+                if(isset($sell->orderbook['bids']) && isset($sell->orderbook['asks']) && isset($buy->orderbook['bids']) && isset($buy->orderbook['asks'])) {
+                    //1 variants  
+                    if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
+                        //calculate profit
+                        $this->additionCalcType_1($sell, $buy);
+                    }
+                    //2 variant
+                    $t = $buy;
+                    $buy = $sell;
+                    $sell = $t;
+                    if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
+                        $res_calc = $this->additionCalcType_1($sell, $buy);               
+                        if($res_calc) {
+                            $deltas[] = $res_calc;
+                           // Log::systemLog('warn', 'AFTERCALC'. json_encode($res_calc), "Trader"); 
+                        }
+                    }
+                }
+
+            }
+        }
+        
+        Log::systemLog('warn', 'RESULTCALC'. json_encode($deltas), "Trader"); 
+        return false;
+    }
+    private function additionCalcType_1 ($sell, $buy) {
+        $sell_price =  number_format($sell->orderbook['bids'][0][0], 12, '.','');
+        $buy_price = number_format($buy->orderbook['asks'][0][0], 12, '.','');
+        $fee_sell = bcmul($sell_price, (string)$sell->taker_fee, 12);
+        $fee_buy = bcmul($buy_price, (string)$buy->taker_fee, 12);
+        //Delta price with commission
+        $delta = bcsub(bcsub($sell_price, $fee_sell,12), bcadd($buy_price,$fee_buy,12),12);
+        //Max volume
+        $volume = ((float)$sell->orderbook['bids'][0][1] < (float)$buy->orderbook['asks'][0][1]) ? $sell->orderbook['bids'][0][1] : $buy->orderbook['asks'][0][1];
+        $volume = number_format($volume, 12, '.','');
+        
+        //Min Volume define exchanges
+        $min_volume = 0;
+        //Min profit, default 0
+        $min_profit = 0;
+
+        if($sell->min_delta_profit_sell > 0) {
+            if($sell->current_amount_base <= $sell->start_amount_base) {
+                $min_profit = $sell->min_delta_profit_sell;
+            }
+        }
+        $min_profit = number_format($min_profit, 12, '.','');
+        
+        //Calculate for 1,000 USDT send over chain
+        if($sell->chain_send_out) {
+            $base_chains = array();
+            $quote_chains = array();
+            foreach($sell->withdrawal as $withd) {
+                if($withd['coin_id'] == $sell->quote_currency_id) {
+                    foreach ($buy->deposit as $dep) {
+                        if($dep['coin_id'] == $sell->quote_currency_id) {
+                            if($withd['chain_id'] === $dep['chain_id']) {
+                                $tmp = array();
+                                $tmp['chain_id'] = $dep['chain_id'];
+                                $tmp['chain_name'] = $dep['chain_name'];
+                                $tmp['chain_fee'] = $withd['chain_fee'];
+                                $tmp['chain_fee_percent'] = $withd['chain_fee_percent'];
+                                $quote_chains[] = $tmp;
+                            }
+                        }
+                    }
+                }
+            }
+            foreach($buy->withdrawal as $withd) {
+                if($withd['coin_id'] == $buy->base_currency_id) {
+                    foreach ($sell->deposit as $dep) {
+                        if($dep['coin_id'] == $buy->base_currency_id) {
+                            if($withd['chain_id'] === $dep['chain_id']) {
+                                $tmp = array();
+                                $tmp['chain_id'] = $dep['chain_id'];
+                                $tmp['chain_name'] = $dep['chain_name'];
+                                $tmp['chain_fee'] = $withd['chain_fee'];
+                                $tmp['chain_fee_percent'] = $withd['chain_fee_percent'];
+                                $base_chains[] = $tmp;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if(!empty($quote_chains)) {
+                $array_chain_fee = [];
+                $array_chain_fee_percent = [];
+                foreach ($quote_chains as $key => $row) {
+                    $array_chain_fee[] = $row['chain_fee'];
+                    $array_chain_fee_percent[] = $row['chain_fee_percent'];
+                }
+                array_multisort($array_chain_fee, SORT_ASC,  $array_chain_fee_percent, SORT_ASC, $quote_chains);
+            }
+            if(!empty($base_chains)) {
+                $array_chain_fee = [];
+                $array_chain_fee_percent = [];
+                foreach ($base_chains as $key => $row) {
+                    $array_chain_fee[] = $row['chain_fee'];
+                    $array_chain_fee_percent[] = $row['chain_fee_percent'];
+                }
+                array_multisort($array_chain_fee, SORT_ASC,  $array_chain_fee_percent, SORT_ASC, $base_chains);
+            }
+
+            if(!empty($base_chains) && !empty($quote_chains)) {
+                $q = $quote_chains[0]['chain_fee'];
+                $b = bcmul($buy->orderbook['bids'][0][0],$base_chains[0]['chain_fee'],12);
+                $fee = bcadd($q, $b, 12);
+                $fee_per_one = bcdiv($fee,"1000",12);
+                $min_profit = bcadd($min_profit, $fee_per_one,12);
+            }
+            else {
+                $delta = "0";
+            }
+        }
+
+
+        if((float)$delta > (float)$min_profit) {
+            //Correct volume 
+            if(!empty($sell->step_volume) && !empty($buy->step_volume)) {
+                $sv = ((float)$sell->step_volume >= (float)$buy->step_volume) ?  $buy->step_volume : $sell->step_volume;
+            }
+            elseif(!empty($sell->step_volume)) {
+                $sv = $sell->step_volume;
+            }
+            else {
+                $sv = $buy->step_volume;  
+            }
+            $sv = number_format($sv, 12, '.','');
+            $rnd = strlen(rtrim(explode('.', $sv)[1],"0"));
+            $volume = floor((float)$volume*pow(10,$rnd))/pow(10,$rnd);
+            $volume = number_format($volume, 12, '.','');
+            
+            //
+            if(isset($sell->min_order_amount) && (float)$sell->min_order_amount > 0) {
+                $min_volume = $sell->min_order_amount;
+            }
+            if(isset($buy->min_order_amount) && (float)$buy->min_order_amount > 0) {
+                $min_volume = ($buy->min_order_amount < $min_volume) ? $buy->min_order_amount : $min_volume;
+            }
+            //Check min quote volume
+            if(isset($sell->min_order_quote_amount) && (float)$sell->min_order_quote_amount > 0) {
+                $min_volume = ((float)$sell->min_order_quote_amount / (float)$sell_price < $min_volume) ? $sell->min_order_quote_amount / (float)$sell_price : $min_volume;
+            }
+            if(isset($buy->min_order_quote_amount) && (float) $buy->min_order_quote_amount > 0) {
+                $min_volume = ((float)$buy->min_order_quote_amount / (float)$buy_price < $min_volume) ? $buy->min_order_quote_amount / (float)$buy_price : $min_volume;
+            }
+            if((float)$this->max_amount_trade > 0) {
+                $volume = ((float)$volume > (float)$this->max_amount_trade) ? $this->max_amount_trade : $volume;
+            }
+            $volume = number_format($volume, 12, '.','');
+            
+            if($volume > $min_volume) {
+                //Log::systemLog('warn', 'CALC '.$sell->exchange_name.' sell='.$sell->orderbook['bids'][0][0].' '.$buy->exchange_name.' buy='.$buy->orderbook['asks'][0][0]." delta=".$delta.' volume='.$volume, "Trader"); 
+                $ret = array();
+                $ret['sell_instance_id'] = $sell->instance_id;
+                $ret['buy_instance_id'] = $buy->instance_id;
+                $ret['volume'] = $volume;
+                $ret['profit'] = $delta;
+                return $ret;
+            }
+        }
+        return false;
     }
 }

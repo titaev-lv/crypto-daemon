@@ -13,20 +13,23 @@ class TraderInstance {
     public $market = '';
     public $pair_id = 0;
     public $pair_name = '';
-    private $base_currency_id = 0;
+    public $base_currency_id = 0;
     private $base_currency_name = '';
-    private $quote_currency_id = 0;
+    public $quote_currency_id = 0;
     private $quote_currency_name = 0;
     
-    public $taker_fee = 0;
-    public $maker_fee = 0;
-    public $min_order_amount = 0;
-    public $min_order_quote_amount = 0;
-    public $step_price = 0;
-    public $step_volume = 0;
-    public $start_amount_base = 0;
-    public $start_amount_quote = 0;
-    public $min_delta_profit_sell = 0;
+    public $start_amount_base = "0";
+    public $start_amount_quote = "0";
+    public $current_amount_base = "0";
+    public $current_amount_quote = "0";
+    
+    public $taker_fee = "0";
+    public $maker_fee = "0";
+    public $min_order_amount = "0";
+    public $min_order_quote_amount = "0";
+    public $step_price = "0";
+    public $step_volume = "0";
+    public $min_delta_profit_sell = "0";
     public $chain_send_out = false;
     
     public $orderbook = array();
@@ -100,15 +103,17 @@ class TraderInstance {
             $this->base_currency_id = Exchange::detectCoinIdByName($this->base_currency_name, $this->exchange_id);
             $this->quote_currency_id = Exchange::detectCoinIdByName($this->quote_currency_name, $this->exchange_id);
             
-            $this->taker_fee = $tr['TAKER_FEE'];
-            $this->maker_fee = $tr['MAKER_FEE'];
-            $this->min_order_amount = $tr['MIN_ORDER_AMOUNT'];
-            $this->min_order_quote_amount = $tr['MIN_ORDER_QUOTE_AMOUNT'];
-            $this->step_price = $tr['STEP_PRICE'];
-            $this->step_volume = $tr['STEP_VOLUME'];
-            $this->start_amount_base = $tr['START_AMOUNT_BASE'];
-            $this->start_amount_quote = $tr['START_AMOUNT_QUOTE'];
-            $this->min_delta_profit_sell = $tr['MIN_DELTA_PROFIT_SELL'];
+            $this->taker_fee = (float)$tr['TAKER_FEE'];
+            $this->maker_fee = (float)$tr['MAKER_FEE'];
+            $this->min_order_amount = (float)$tr['MIN_ORDER_AMOUNT'];
+            $this->min_order_quote_amount = (float)$tr['MIN_ORDER_QUOTE_AMOUNT'];
+            $this->step_price = (float)$tr['STEP_PRICE'];
+            $this->step_volume = (float)$tr['STEP_VOLUME'];
+            $this->start_amount_base = (float)$tr['START_AMOUNT_BASE'];
+            $this->start_amount_quote = (float)$tr['START_AMOUNT_QUOTE'];
+            $this->current_amount_base = $this->start_amount_base;
+            $this->current_amount_quote = $this->start_amount_quote;
+            $this->min_delta_profit_sell = (float)$tr['MIN_DELTA_PROFIT_SELL'];
             $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
 
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
