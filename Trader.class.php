@@ -255,28 +255,59 @@ class Trader {
                 $buy = $this->fetchObjectPoolTraderInstace($p[1]);
                 
                 if(isset($sell->orderbook['bids']) && isset($sell->orderbook['asks']) && isset($buy->orderbook['bids']) && isset($buy->orderbook['asks'])) {
-                    //1 variants  
-                    if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
-                        //calculate profit
-                        $this->additionCalcType_1($sell, $buy);
-                    }
-                    //2 variant
-                    $t = $buy;
-                    $buy = $sell;
-                    $sell = $t;
-                    if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
-                        $res_calc = $this->additionCalcType_1($sell, $buy);               
-                        if($res_calc) {
-                            $deltas[] = $res_calc;
-                           // Log::systemLog('warn', 'AFTERCALC'. json_encode($res_calc), "Trader"); 
+                    //Check timestamp
+                    if(isset($sell->orderbook['timestamp']) && isset($buy->orderbook['timestamp']) && $sell->orderbook['timestamp'] && $buy->orderbook['timestamp']) {
+                        if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 6) {
+                            //1 variants  
+                            if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
+                                //calculate profit
+                                $res_calc = $this->additionCalcType_1($sell, $buy);
+                                if($res_calc) {
+                                    $deltas[] = $res_calc;
+                                   // Log::systemLog('warn', 'AFTERCALC'. json_encode($res_calc), "Trader"); 
+                                }
+                            }
+                            //2 variant
+                            $t = $buy;
+                            $buy = $sell;
+                            $sell = $t;
+                            if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
+                                $res_calc = $this->additionCalcType_1($sell, $buy);               
+                                if($res_calc) {
+                                    $deltas[] = $res_calc;
+                                   // Log::systemLog('warn', 'AFTERCALC'. json_encode($res_calc), "Trader"); 
+                                }
+                            }
+                        }
+                        else {
+                            $a = microtime(true) - (float)$sell->orderbook['timestamp']*1E-6;
+                            $b = microtime(true) - (float)$buy->orderbook['timestamp']*1E-6;
+                            Log::systemLog('warn',"Spot DATA price timestamp very old a=".$a. '  b='.$b, "Trader");
                         }
                     }
+                    else {
+                        //Log::systemLog('warn',"ddd". json_encode($sell->orderbook), "Trader");
+                       // Log::systemLog('warn',"ddd". json_encode($sell->orderbook), "Trader");
+                    }
                 }
-
             }
         }
-        
-        Log::systemLog('warn', 'RESULTCALC'. json_encode($deltas), "Trader"); 
+        if(!empty($deltas)) {
+            //Log::systemLog('warn', 'RESULT_DELTAS'. json_encode($deltas), "Trader"); 
+            $out = array();
+            $profit_last = 0;
+            //Select profitble
+            foreach ($deltas as $kd=>$d) {
+                if((float)$d['profit'] > $profit_last) {
+                    $out = $deltas[$kd];
+                    $out['volume'] = rtrim($out['volume'],"0");
+                    $out['profit'] = rtrim($out['profit'],"0");
+                    $profit_last = (float)$d['profit'];
+                }
+            }
+            //Log::systemLog('warn', 'RESULT_OUT'. json_encode($out), "Trader"); 
+            return $out;
+        }
         return false;
     }
     private function additionCalcType_1 ($sell, $buy) {
@@ -364,6 +395,7 @@ class Trader {
                 $fee = bcadd($q, $b, 12);
                 $fee_per_one = bcdiv($fee,"1000",12);
                 $min_profit = bcadd($min_profit, $fee_per_one,12);
+                //Log::systemLog('warn', 'COMM fee_per_one='.$fee_per_one.' min_profit='.$min_profit.' '.$sell->exchange_name.'->'.$buy->exchange_name, "Trader"); 
             }
             else {
                 $delta = "0";

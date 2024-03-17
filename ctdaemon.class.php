@@ -566,7 +566,7 @@ class ctdaemon {
     
     public function runProcPriceMonitor() {
         global $DB;
-        sleep(3);
+        sleep(6);
         //Create DB connection
         $DB = DB::init($this->getDBEngine(),$this->getDBCredentials());
         Log::systemLog('info',"Process type \"Price Monitor\" STARTED pid=".getmypid(), "Price Monitor");
@@ -746,7 +746,7 @@ class ctdaemon {
                             if($proc['trade_id'] === $tr['ID'] && $proc['pid'] > 0) {
                                 $trader_exist_flag = true;
                                 //Check response
-                                if((microtime(true)*1E6 - $proc['timestamp'])*1E-6 > 9) {
+                                if((microtime(true)*1E6 - $proc['timestamp'])*1E-6 > 15) {
                                     $trader_exist_flag = false;
                                     Log::systemLog('error', 'Proc='.$proc['pid'].' Traader NOT RESPONSE more 9 seconds.', "Trade Monitor");
                                     $kill = posix_kill($this->proc[$k]['pid'], SIGTERM);
@@ -852,7 +852,7 @@ class ctdaemon {
     private function runProcTrader() {
         global $DB;
         //Trader must run after run all system's processes
-        sleep(2);
+        sleep(10);
         
         $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
         Log::systemLog('info',"Process type \"Trader\" STARTED pid=".getmypid(), "Trader");
@@ -932,13 +932,19 @@ class ctdaemon {
                     $trader->readOrderBooks();                   
                     //$stop = microtime(true) - $start;
                     //Log::systemLog('debug', 'OBREAD '. $stop, "Trader");
-                    $trader->calculateType_1();
-                    
-                    usleep(10000);
+                    $trans_calc = $trader->calculateType_1();
+                    if($trans_calc !== false) {
+                        $trade_allow = true;
+                    }
+                    else {
+                        usleep(5000);
+                    }
                 }
                 while($trade_allow !== true);
             }
-
+            
+            Log::systemLog('warn', 'READY TRANS'. json_encode($trans_calc), "Trader");
+            
             //reset arbitrage transaction
             //$trader->arbitrage_id = 0;
             
@@ -1189,13 +1195,13 @@ class ctdaemon {
             $task_create_worker = ServiceRAM::read('create_trade_worker');
         }
         while($task_create_worker === false || empty($task_create_worker));
-        Log::systemLog('debug', 'Process "Trade Worker" pid='. getmypid().' received = '.json_encode($task_create_worker), "Trade Worker");
+        Log::systemLog('warn', 'Process "Trade Worker" pid='. getmypid().' received = '.json_encode($task_create_worker), "Trade Worker");
         while(1) {
             $this->timestamp = microtime(true)*1E6;
             $this->updateProcTree();
             
             
-            usleep(100000);
+            usleep(1000);
         }
     }
     private function runProcOrderTransMonitor() {
