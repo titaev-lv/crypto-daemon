@@ -257,7 +257,7 @@ class Trader {
                 if(isset($sell->orderbook['bids']) && isset($sell->orderbook['asks']) && isset($buy->orderbook['bids']) && isset($buy->orderbook['asks'])) {
                     //Check timestamp
                     if(isset($sell->orderbook['timestamp']) && isset($buy->orderbook['timestamp']) && $sell->orderbook['timestamp'] && $buy->orderbook['timestamp']) {
-                        if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 6) {
+                        if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 7) {
                             //1 variants  
                             if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
                                 //calculate profit

@@ -618,7 +618,7 @@ class ctdaemon {
                                     //Log::systemLog('debug',"TIMESTAMP ". $tmp);
                                     //Log::systemLog('debug',"TIMESTAMP NOW ". microtime(true));
                                     //Log::systemLog('debug',"DELTA TIME ". (microtime(true) - $tmp));
-                                    if((microtime(true) - $tmp) < 5) {
+                                    if((microtime(true) - $tmp) < 7) {
                                         $sql = 'INSERT INTO `PRICE_SPOT_LOG` (
                                                      `DATE`,
                                                      `PRICE_TIMESTAMP`,
@@ -1189,13 +1189,19 @@ class ctdaemon {
     
      private function runProcTradeWorker() {
         global $DB; 
-         
+        //Create DB connection
+        $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
+        
         Log::systemLog('info',"Process type \"Trade Worker\" STARTED pid=".getmypid(), "Trade Worker");  
         do {
             $task_create_worker = ServiceRAM::read('create_trade_worker');
         }
         while($task_create_worker === false || empty($task_create_worker));
         Log::systemLog('warn', 'Process "Trade Worker" pid='. getmypid().' received = '.json_encode($task_create_worker), "Trade Worker");
+
+        //init
+        $worker = new TradeWorker($task_create_worker[0]['data']);
+        
         while(1) {
             $this->timestamp = microtime(true)*1E6;
             $this->updateProcTree();

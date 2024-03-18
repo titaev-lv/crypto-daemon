@@ -178,6 +178,18 @@ class Exchange {
         }
         return false;
     }
+    public static function detectExchangeByAccountId($account_id) {
+        global $DB;
+        $sql = "SELECT `EXID` FROM `EXCHANGE_ACCOUNTS` WHERE `ID` = ?";
+        $bind = array();
+        $bind[0]['type'] = 'i';
+        $bind[0]['value'] = $account_id;
+        $exid= $DB->select($sql,$bind); 
+        if(is_array($exid) && !empty($exid[0]['EXID'])) {
+            return intval($exid[0]['EXID']);
+        }
+        return false;
+    }
     public function getExchangeNameById($id) {
         
     }
