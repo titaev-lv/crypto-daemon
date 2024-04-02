@@ -877,78 +877,104 @@ class ctdaemon {
             //Update tree
             $this->updateProcTree();
             
-            //Update trader's data 
-            $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
-            if($update) {
-                $trader->timer_update_data_ts = microtime(true)*1E6;
-                //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
-                $trader->updateTrader();
-            }
-            
-            //Check status last arbitrage transaction (return integer)
-            $arb_last_status = $trader->getLastArbTransStatus();
-            //Log::systemLog('debug', 'ARBSTATUS pid='. $arb_status.'', "Trader");
-            switch($arb_last_status) {
-                case 4:
-                    $trader->trader_status = 20;
-                    sleep(1);
+            switch($trader->trader_type) {
+                case 1:
+                    /*
+                     * Type 1. Market Arbitrage
+                     */
+                    //Update trader's data 
+                    $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
+                    if($update) {
+                        $trader->timer_update_data_ts = microtime(true)*1E6;
+                        //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
+                        $trader->updateTrader();
+                    }
+
+                    //Check status last arbitrage transaction (return integer)
+                    $arb_last_status = $trader->getLastArbTransStatus();
+                    //Log::systemLog('debug', 'ARBSTATUS pid='. $arb_status.'', "Trader");
+                    switch($arb_last_status) {
+                        case 4: //error
+                            $trader->trader_status = 20;
+                            sleep(1);
+                            break;
+                        case 6: //complete but loss
+                            if ($trader->checkOverflowCountLossArbTrans()) {
+                                $trader->trader_status = 30;
+                                sleep(1);
+                            }
+                            else {
+                                $continue = true;
+                            }
+                           break;
+                        default:
+                            $continue = true;
+                    }
+
+                    //Calculate position
+                    if($continue) {
+
+                    }
+
+                    //Prepare arbitrage transaction
+                    if($continue && $trader->arbitrage_id == 0) {
+                        $arb_id = $trader->prepareArbitrageTrans();
+                        if(!$arb_id) {
+                            $continue = false; 
+                        }
+                    }
+
+                    //Analyze
+                    if($continue) {
+                        $trade_allow = false;
+                        do {
+                            //This for keep alive process
+                            $this->timestamp = microtime(true)*1E6;
+                            $this->updateProcTree();
+
+                            //Read Order Book data for all TradeInstance. Read 20-65us at 6 trade proc
+                            //$start = microtime(true);
+                            $trader->readOrderBooks();                   
+                            //$stop = microtime(true) - $start;
+                            //Log::systemLog('debug', 'OBREAD '. $stop, "Trader");
+                            $trans_calc = $trader->calculateType_1();
+                            if($trans_calc !== false) {
+                                $trade_allow = true;
+                            }
+                            else {
+                                usleep(5000);
+                            }
+                        }
+                        while($trade_allow !== true);
+                        //Log::systemLog('debug', 'READY TRANS'. json_encode($trans_calc), "Trader");
+                    }
+
+                    //Calculation Ok. Send Buy and Sell request to RAM
+                    if($continue) {                    
+                        $sell = $trader->fetchObjectPoolTraderInstace($trans_calc['sell_instance_id']);
+                        $buy = $trader->fetchObjectPoolTraderInstace($trans_calc['buy_instance_id']);
+                        $volume = $trans_calc['volume'];
+                        $calc_profit = $trans_calc['profit'];
+                        
+                        //Push request to Worker RAM
+                        $s = $sell->requestMarketSell($arb_id, $volume);
+                        $s = $sell->requestMarketSell($arb_id."SSS", $volume);
+                        $b = $buy->requestMarketBuy($arb_id, $volume);
+                        $b = $buy->requestMarketBuy($arb_id."SSS", $volume);
+                        //Write arbitrage transaction detail into DB
+                        if($s && $b) {
+                            
+                        }
+                    }
+
+                    //reset arbitrage transaction
+                    //$trader->arbitrage_id = 0;
+
+                    sleep(2);
                     break;
-                case 6:
-                    if ($trader->checkOverflowCountLossArbTrans()) {
-                        $trader->trader_status = 30;
-                        sleep(1);
-                    }
-                    else {
-                        $continue = true;
-                    }
-                   break;
                 default:
-                    $continue = true;
+                    sleep(5);
             }
-            
-            //Calculate position
-            if($continue) {
-                
-            }
-            
-            //Prepare arbitrage transaction
-            if($continue && $trader->arbitrage_id == 0) {
-                $arb_id = $trader->prepareArbitrageTrans();
-                if(!$arb_id) {
-                    $continue = false; 
-                }
-            }
-            
-            //Analyze
-            if($continue) {
-                $trade_allow = false;
-                do {
-                    //This for keep alive process
-                    $this->timestamp = microtime(true)*1E6;
-                    $this->updateProcTree();
-                    
-                    //Read Order Book data for all TradeInstance. Read 20-65us at 6 trade proc
-                    //$start = microtime(true);
-                    $trader->readOrderBooks();                   
-                    //$stop = microtime(true) - $start;
-                    //Log::systemLog('debug', 'OBREAD '. $stop, "Trader");
-                    $trans_calc = $trader->calculateType_1();
-                    if($trans_calc !== false) {
-                        $trade_allow = true;
-                    }
-                    else {
-                        usleep(5000);
-                    }
-                }
-                while($trade_allow !== true);
-            }
-            
-            Log::systemLog('warn', 'READY TRANS'. json_encode($trans_calc), "Trader");
-            
-            //reset arbitrage transaction
-            //$trader->arbitrage_id = 0;
-            
-            sleep(5);
         }
         
     }
@@ -1206,8 +1232,13 @@ class ctdaemon {
             $this->timestamp = microtime(true)*1E6;
             $this->updateProcTree();
             
+            //read RAM
+            $queue_el = $worker->readInputRAM();
+            if($queue_el) {
+                Log::systemLog('warn', 'Process "Trade Worker" pid='. getmypid().' read RAM '.json_encode($queue_el), "Trade Worker");
+            }
             
-            usleep(1000);
+            usleep(10);
         }
     }
     private function runProcOrderTransMonitor() {

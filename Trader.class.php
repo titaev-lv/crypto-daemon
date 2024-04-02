@@ -248,7 +248,7 @@ class Trader {
             }
             unset($tmp);
         }
-  // Log::systemLog('warn', 'POOL'. json_encode($this->pool), "Trader");        
+        // Log::systemLog('warn', 'POOL'. json_encode($this->pool), "Trader");        
         if(!empty($pairs)) {
             foreach ($pairs as $p) {
                 $sell = $this->fetchObjectPoolTraderInstace($p[0]);
@@ -300,8 +300,8 @@ class Trader {
             foreach ($deltas as $kd=>$d) {
                 if((float)$d['profit'] > $profit_last) {
                     $out = $deltas[$kd];
-                    $out['volume'] = rtrim($out['volume'],"0");
-                    $out['profit'] = rtrim($out['profit'],"0");
+                    //$out['volume'] = rtrim($out['volume'],"0");
+                    //$out['profit'] = rtrim($out['profit'],"0");
                     $profit_last = (float)$d['profit'];
                 }
             }

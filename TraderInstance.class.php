@@ -3,6 +3,7 @@
 class TraderInstance {
     public $instance_id = 0;
     private $trader_id = 0;
+    private $trader_type = 0;
     public $user_id = 0;
         
     public $account_id = 0;
@@ -35,6 +36,8 @@ class TraderInstance {
     public $orderbook = array();
     private $orderbook_address = '';
     
+    private $worker_address = '';
+    
     public $deposit = array();
     public $withdrawal = array();
             
@@ -59,7 +62,8 @@ class TraderInstance {
                     stp.MIN_ORDER_AMOUNT,
                     stp.MIN_ORDER_QUOTE_AMOUNT,
                     stp.STEP_PRICE,
-                    stp.STEP_VOLUME
+                    stp.STEP_VOLUME,
+                    tr.TYPE
                 FROM 
                     TRADE_SPOT_ARRAYS tsa
                 INNER JOIN
@@ -95,6 +99,7 @@ class TraderInstance {
             $this->exchange_id = $tr['EXCHANGE_ID'];
             $this->exchange_name = $tr['EXCHANGE_NAME'];
             $this->market = $tr['MARKET'];
+            $this->trader_type = $tr['TYPE'];
             $this->pair_id = $tr['PAIR_ID'];
             $this->pair_name = Exchange::detectNamesPair($this->pair_id);
             $pair_arr = explode("/", $this->pair_name);
@@ -119,6 +124,12 @@ class TraderInstance {
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
             $this->orderbook_address = hash('xxh3',$this->exchange_id.'|'.$this->market.'|'.$this->pair_id);
             
+            if($this->trader_type == 1 || $this->trader_type == 2) {
+                $this->worker_address = hash('xxh3','WORKER|'.$this->account_id.'|'.$this->market.'|0');
+            }
+            elseif($this->trader_type == 3) {
+                $this->worker_address = hash('xxh3','WORKER|'.$this->account_id.'|'.$this->market.'|'.$this->pair_id);
+            }
             //get data by chains for deposit and withdrawal
             $sql = "SELECT
                         d.COIN_ID,
@@ -243,6 +254,102 @@ class TraderInstance {
     public function readOrderBook() {
         $ob = OrderBook::readDepthRAM($this->orderbook_address);
         $this->orderbook = $ob;
+        return true;
+    }
+    public function requestMarketSell($arb_id, $volume) {
+        $write = array();
+        $write['arbitrage_id'] = $arb_id;
+        $write['type'] = 'market_sell';
+        $write['volume'] = $volume;
+        Log::systemLog('error', 'MARKET SELL arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address, "Trader");
+        $this->writeInputWorkerRAM($write);
+        return true;
+    }
+    public function requestMarketBuy($arb_id, $volume) {
+        $write = array();
+        $write['arbitrage_id'] = $arb_id;
+        $write['type'] = 'market_buy';
+        $write['volume'] = $volume;
+        Log::systemLog('error', 'MARKET BUY arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address, "Trader");
+        $this->writeInputWorkerRAM($write);
+        return true;
+    }
+    
+    private function readOutputWorkerRAM () {
+        $element = false;
+        $path = __DIR__."/ftok/".$this->worker_address.'.ftok';
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'O');
+        $semId = sem_get($id);
+        sem_acquire($semId);
+        //read segment
+        $shmId = shm_attach($id);
+        $var = 1;
+        $data = '';
+        $data_arr = array();
+        if(shm_has_var($shmId, $var)) {
+            //get data
+            $data = shm_get_var($shmId, $var);
+        } 
+        shm_detach($shmId);
+        //
+        if(!empty($data)) {
+            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+        }
+        if(is_array($data_arr) && !empty($data_arr)) {
+            $element = array_shift($data_arr);
+        }
+        $data_json = json_encode($data_arr);
+        $shmId = shm_attach($id, strlen($data_json)+4096);
+        $var = 1;
+        shm_put_var($shmId, $var, $data_json);
+        shm_detach($shmId);
+        sem_release($semId);
+        return $element;
+    }
+    
+    private function writeInputWorkerRAM ($input_data) {
+        $path = __DIR__."/ftok/".$this->worker_address.'.ftok';
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'I');
+        $semId = sem_get($id);
+        sem_acquire($semId);
+        //read segment
+        $shmId = shm_attach($id);
+        $var = 1;
+        $data = '';
+        $data_arr = array();
+        if(shm_has_var($shmId, $var)) {
+            //get data
+            $data = shm_get_var($shmId, $var);
+        } 
+        shm_detach($shmId);
+        //
+        if(!empty($data)) {
+            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+        }
+        if(!is_array($data_arr)) {
+            $data_arr = array();
+        }
+        if(is_array($data_arr)) {
+            array_push($data_arr, $input_data);
+        }
+        $data_json = json_encode($data_arr);
+        $shmId = shm_attach($id, strlen($data_json)+4096);
+        $var = 1;
+        shm_put_var($shmId, $var, $data_json);
+        shm_detach($shmId);
+        sem_release($semId);
         return true;
     }
 }
