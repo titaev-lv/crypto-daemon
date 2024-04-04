@@ -153,7 +153,7 @@ class CoinEx implements ExchangeInterface {
         global $DB;
 
         //1. Get Request
-        $json_data = $this->request(str_replace("v1","v2",$this->base_url).'/spot/market');
+        $json_data = $this->request($this->base_url.'/v2/spot/market');
         if(!$json_data) {
             return false;
         }
@@ -268,7 +268,7 @@ class CoinEx implements ExchangeInterface {
         $header['X-COINEX-TIMESTAMP'] = $this->timestamp;
             
         //Request
-        $json_fee = $this->request(str_replace("v1", "v2", $this->base_url).'/account/trade-fee-rate', $str, 'GET', $header);
+        $json_fee = $this->request($this->base_url.'/v2/account/trade-fee-rate', $str, 'GET', $header);
         
         if($json_fee) {
             $fee = json_decode($json_fee,true);
@@ -295,7 +295,7 @@ class CoinEx implements ExchangeInterface {
     public function updateCoinsInfoData() {
         global $DB;
         
-        $json_coins = $this->request($this->base_url.'/common/asset/config');
+        $json_coins = $this->request($this->base_url.'/v1/common/asset/config');
         if(empty($json_coins)) {
             Log::systemLog('error', 'Error request Coin info for CoinEx is failed');
             $this->lastError = 'Error request Coin info for CoinEx is failed';
@@ -420,7 +420,7 @@ class CoinEx implements ExchangeInterface {
        // https://api.coinex.com/v1/market/kline?market=LUNCUSDT&type=1min&limit=1000
         $pair = preg_replace("/\//",'',$pair);
         $str = 'market='.$pair.'&type='.$timeframe.'&limit='.$limit;
-        $json_kline = $this->request($this->base_url.'/market/kline', $str, 'GET');
+        $json_kline = $this->request($this->base_url.'/v1/market/kline', $str, 'GET');
         if(empty($json_kline)) {
             Log::systemLog('error', 'Error request K-Line Kukoin for '.$pair);
             $this->lastError = 'Error request K-Line Kukoin for '.$pair;
@@ -615,7 +615,7 @@ class CoinEx implements ExchangeInterface {
     }
     public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
         $str = 'market='.$symbol.'&merge='.$merge.'&limit='.$limit;
-        $json_response = $this->request($this->base_url.'/market/depth', $str, 'GET');
+        $json_response = $this->request($this->base_url.'/v1/market/depth', $str, 'GET');
         if(empty($json_response)) {
             Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol);
             $this->lastError =  'Error request CoinEx Market Depth for '.$symbol;
