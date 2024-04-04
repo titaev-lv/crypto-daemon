@@ -13,6 +13,7 @@ class CoinEx implements ExchangeInterface {
     private $api_key = '';
     private $passphrase = '';
     private $secret_key = '';
+    private $timestamp = 0;
     
     public $lastError = '';
 
@@ -45,36 +46,61 @@ class CoinEx implements ExchangeInterface {
             }
         }
     }
+
     //Get Exchange ID
     public function getId() {
         return $this->exchange_id;
     }
+
     //Get Exchange Name
     public function getName() {
         return $this->name;
     }
+
     //Get Exchange Account ID
     public function getAccountId() {
         return $this->account_id;
     }
+
     public function getMarket() {
         return $this->market;
     }
-    private function sign($arr_param) {
-        ksort($arr_param,SORT_STRING);
-        $arr_param['secret_key'] = $this->secret_key;
-        $str = '';
-        $i=0;
-        foreach ($arr_param as $k=>$v) {
-            if($i>0) {
-                $str .= '&';
+
+    private function sign($method,$url,$param=array()) {
+        $method = strtoupper($method);
+        $url = '/v2'.$url;
+        $request_str = $method.$url;
+        if(!empty($param)) {
+            switch($method) {
+                case 'GET':
+                    $param_str = '?';
+                    $count_param = count($param);
+                    $i=0;
+                    foreach($param as $k=>$v) {
+                        $param_str .= $k.'='.$v;
+                        $i++;
+                        if($i<$count_param) {
+                            $param_str .= '&';
+                        }
+                    }
+                    $request_str .= $param_str;
+                    break;
+                case 'POST':
+                case 'DELETE':
+                default:
+                    break;            
             }
-            $str .= $k.'='.$v;
-            $i++;
         }
-        $hash = strtoupper(md5($str));
-        return $hash;
+        $this->timestamp = $this->getTonce();
+        $request_str .= $this->timestamp;
+        $request_str .= $this->secret_key;
+        
+        //signed_str = sha256(prepared_str).hexdigest().lower()
+        $hash = hash("sha256", $request_str);
+        $signature = strtolower($hash);
+        return $signature;
     }
+    
     private function request($url,$param=false,$method = 'GET', $header = array()) {
         $ch = curl_init();
         curl_setopt ($ch,  CURLOPT_SSLVERSION, 6);
@@ -117,8 +143,9 @@ class CoinEx implements ExchangeInterface {
             return false;
         }
     }
+    
     private function getTonce() {
-        $time = new DateTime();
+        $time = new DateTime("now",new DateTimeZone('UTC'));
         return $time->format('U')*1000;
     }
 
@@ -197,17 +224,16 @@ class CoinEx implements ExchangeInterface {
             return false;
         }
     }
+    
     public function requestSpotTradeFee($pair_id) {
         $pair = Exchange::detectNamesPair($pair_id);
         //Prepare parameters for request
         $arr_param = array(
-            "access_id"=>$this->api_key,
-            "tonce"=> $this->getTonce(),
+            "market_type"=>'SPOT',
             "market"=> str_replace("/",'',$pair),
-            "business_type"=>'SPOT'
         );
         //Log::systemLog('error', 'PARAM ='. json_encode($arr_param));
-        $sign = $this->sign($arr_param);
+        $sign = $this->sign("GET", "/account/trade-fee-rate", $arr_param);
         $str = '';
         $i=0;
         foreach ($arr_param as $k=>$v) {
@@ -217,16 +243,18 @@ class CoinEx implements ExchangeInterface {
             $str .= $k.'='.$v;
             $i++;
         }
-        $header['Authorization'] = $sign;
+        $header['X-COINEX-KEY'] = $this->api_key;
+        $header['X-COINEX-SIGN'] = $sign;
+        $header['X-COINEX-TIMESTAMP'] = $this->timestamp;
             
         //Request
-        $json_fee = $this->request($this->base_url.'/account/market/fee', $str, 'GET', $header);
+        $json_fee = $this->request(str_replace("v1", "v2", $this->base_url).'/account/trade-fee-rate', $str, 'GET', $header);
         
         if($json_fee) {
             $fee = json_decode($json_fee,true);
             if($fee['code'] == "0") {
-                $taker_fee = (float)$fee['data']['taker'];
-                $maker_fee = (float)$fee['data']['maker'];   
+                $taker_fee = (float)$fee['data']['taker_rate'];
+                $maker_fee = (float)$fee['data']['maker_rate'];   
                 return array(
                     "taker_fee" => $taker_fee,
                     "maker_fee" => $maker_fee
