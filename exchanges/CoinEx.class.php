@@ -153,7 +153,7 @@ class CoinEx implements ExchangeInterface {
         global $DB;
 
         //1. Get Request
-        $json_data = $this->request($this->base_url.'/market/info');
+        $json_data = $this->request(str_replace("v1","v2",$this->base_url).'/spot/market');
         if(!$json_data) {
             return false;
         }
@@ -162,8 +162,13 @@ class CoinEx implements ExchangeInterface {
             if(count($data['data'])>0) {
                 $ins_data = array();
                 foreach ($data['data'] as $d) {
-                    $tmp['base_currency_id'] = Exchange::detectCoinIdByName($d['trading_name'], $this->exchange_id);
-                    $tmp['quote_currency_id'] = Exchange::detectCoinIdByName($d['pricing_name'], $this->exchange_id);
+                    $tmp['base_currency_id'] = Exchange::detectCoinIdByName($d['base_ccy'], $this->exchange_id);
+                    $tmp['quote_currency_id'] = Exchange::detectCoinIdByName($d['quote_ccy'], $this->exchange_id);
+                    $tmp['min_order_amount'] = $d['min_amount'];
+                    $exp = (int) $d['quote_ccy_precision'];
+                    $tmp['step_price'] = pow(10, (-1) * $exp);
+                    $exp2 = (int) $d['base_ccy_precision'];
+                    $tmp['step_volume'] =  pow(10, (-1) * $exp2);
                     $ins_data[] = $tmp;
                     /*if(empty($tmp['base_currency_id'])) {
                         echo $d['trading_name'].'/'.$d['pricing_name'].' -- '.$tmp['base_currency_id'].'-'.$tmp['quote_currency_id'];
@@ -177,9 +182,12 @@ class CoinEx implements ExchangeInterface {
                         if($d2['base_currency_id'] && $d2['quote_currency_id']) {
                             $base_currency_id = $d2['base_currency_id'];
                             $quote_currency_id = $d2['quote_currency_id'];
+                            $min_order_amount = $d2['min_order_amount'];
+                            $step_price = $d2['step_price'];
+                            $step_volume = $d2['step_volume'];
                             
-                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`) VALUES(?,?,?) '
-                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW()';
+                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`,`MIN_ORDER_AMOUNT`,`STEP_PRICE`,`STEP_VOLUME`) VALUES(?,?,?,?,?,?) '
+                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW(),`MIN_ORDER_AMOUNT`=?,`STEP_PRICE`=?,`STEP_VOLUME`=?';
                             $bind = array();
                             $bind[0]['type'] = 'i';
                             $bind[0]['value'] = $base_currency_id;
@@ -187,12 +195,24 @@ class CoinEx implements ExchangeInterface {
                             $bind[1]['value'] = $quote_currency_id;
                             $bind[2]['type'] = 'i';
                             $bind[2]['value'] = $this->exchange_id;
-                            $bind[3]['type'] = 'i';
-                            $bind[3]['value'] = $base_currency_id;
-                            $bind[4]['type'] = 'i';
-                            $bind[4]['value'] = $quote_currency_id;
-                            $bind[5]['type'] = 'i';
-                            $bind[5]['value'] = $this->exchange_id;
+                            $bind[3]['type'] = 'd';
+                            $bind[3]['value'] = $min_order_amount;
+                            $bind[4]['type'] = 'd';
+                            $bind[4]['value'] = $step_price;
+                            $bind[5]['type'] = 'd';
+                            $bind[5]['value'] = $step_volume;
+                            $bind[6]['type'] = 'i';
+                            $bind[6]['value'] = $base_currency_id;
+                            $bind[7]['type'] = 'i';
+                            $bind[7]['value'] = $quote_currency_id;
+                            $bind[8]['type'] = 'i';
+                            $bind[8]['value'] = $this->exchange_id;
+                            $bind[9]['type'] = 'd';
+                            $bind[9]['value'] = $min_order_amount;
+                            $bind[10]['type'] = 'd';
+                            $bind[10]['value'] = $step_price;
+                            $bind[11]['type'] = 'd';
+                            $bind[11]['value'] = $step_volume;
 
                             $ins = $DB->insert($sql,$bind);
                             if(!empty($DB->getLastError())) {
