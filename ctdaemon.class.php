@@ -532,12 +532,12 @@ class ctdaemon {
                     foreach ($ob->subscribe as $s) {
                         $symbol = $s['name'];
                         $received = $exchange->restMarketDepth($symbol); 
-                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response NATIVE '. $received);
+                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response NATIVE '. $received, "Order Book");
                         $return = $exchange->restMarketDepthParse($received);
                         if(isset($return['data'])) {
                             $return['data'][0]['pair'] = $symbol;
                         }
-                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response parse '. json_encode($return), "Order Book");
+                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response parse '. json_encode($return), "Order Book");
                         if($return['method'] == 'depth') {
                             //search in subscribe array
                             $found_sunscribe = false;
@@ -553,7 +553,7 @@ class ctdaemon {
                             //Write data into RAM
                             if($found_sunscribe === true) {
                                 $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
-                                Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' REST API Receive parse '. json_encode($return_merge), "Order Book");                                                     
+                                //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' REST API Receive parse '. json_encode($return_merge), "Order Book");                                                     
                                 $ob->writeDepthRAM($return_merge);
                             }
                         }

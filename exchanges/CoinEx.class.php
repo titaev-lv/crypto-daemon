@@ -145,8 +145,12 @@ class CoinEx implements ExchangeInterface {
     }
     
     private function getTonce() {
-        $time = new DateTime("now",new DateTimeZone('UTC'));
+        $time = new DateTime("now", new DateTimeZone('UTC'));
         return $time->format('U')*1000;
+    }
+    private function getTonceU() {
+        $time = new DateTime("now", new DateTimeZone('UTC'));
+        return $time->format('Uu');
     }
 
     public function syncSpotAllTradePair() {
@@ -613,9 +617,9 @@ class CoinEx implements ExchangeInterface {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
         return false;
     }
-    public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
-        $str = 'market='.$symbol.'&merge='.$merge.'&limit='.$limit;
-        $json_response = $this->request($this->base_url.'/v1/market/depth', $str, 'GET');
+    public function restMarketDepth ($symbol, $interval="0", $limit= 20) {
+        $str = 'market='.$symbol.'&interval='.$interval.'&limit='.$limit;
+        $json_response = $this->request($this->base_url.'/v2/spot/depth', $str, 'GET');
         if(empty($json_response)) {
             Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol);
             $this->lastError =  'Error request CoinEx Market Depth for '.$symbol;
@@ -623,8 +627,8 @@ class CoinEx implements ExchangeInterface {
         }
         $r = json_decode($json_response,JSON_OBJECT_AS_ARRAY);
         if($r['code'] != 0) {
-            Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol.' Return code '.$code);
-            $this->lastError = 'Error request CoinEx Market Depth for '.$symbol.' Return code '.$code;
+            Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol.' Return code '.$r['code']);
+            $this->lastError = 'Error request CoinEx Market Depth for '.$symbol.' Return code '.$r['code'];
             return false;
         }
         return $json_response;
@@ -639,10 +643,11 @@ class CoinEx implements ExchangeInterface {
                     $tmp = array();
                     $tmp['diff'] = false;
                     $tmp['pair'] = false;
-                    $tmp['asks'] = $r['data']['asks'];
-                    $tmp['bids'] = $r['data']['bids'];
-                    $tmp['last_price'] = $r['data']['last'];
-                    $tmp['timestamp'] = $r['data']['time']*1E3;
+                    $tmp['asks'] = $r['data']['depth']['asks'];
+                    $tmp['bids'] = $r['data']['depth']['bids'];
+                    $tmp['last_price'] = $r['data']['depth']['last'];
+                    $tmp['price_timestamp'] = $r['data']['depth']['updated_at']*1E3;
+                    $tmp['timestamp'] = $this->getTonceU();
                     $ret['data'][] = $tmp;                    
                     $ret['id'] = 0;
                     return $ret;
