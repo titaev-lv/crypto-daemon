@@ -90,6 +90,7 @@ class OrderBook {
             if($d['diff'] == false || empty($data_arr)) {
                 $element['sys_pair'] = $d['sys_pair'];
                 $element['pair'] = $d['pair'];
+                $element['price_timestamp'] = $d['price_timestamp'];
                 $element['timestamp'] = $d['timestamp'];
                 $element['last_price'] = (float) $d['last_price'];
                 foreach ($d['asks'] as $b) {
@@ -169,6 +170,7 @@ class OrderBook {
                 if($resort_asks === true) {
                     usort($src_mem['asks'], function($a,$b){return $a[0]<=>$b[0];});
                 }
+                $src_mem['price_timestamp'] = $d['price_timestamp'];
                 $src_mem['timestamp'] = $d['timestamp'];
                 $data_arr = $src_mem;
                 //Log::systemLog(4, 'ORDER BOOK ARR FOR MERGE '.json_encode($src));                

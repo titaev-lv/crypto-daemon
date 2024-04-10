@@ -521,67 +521,76 @@ class CoinEx implements ExchangeInterface {
         $c = $this->getWebSoketCount();
         $client_ws->text('{
           "method":"server.ping",
-          "params":[],
+          "params":{},
           "id": '.$c.'
         }');
         return true;
     }
     public function webSocketParse($receive) {
-        $r = json_decode($receive, JSON_OBJECT_AS_ARRAY);
+        $is_gzip = 0 === mb_strpos($receive, "\x1f" . "\x8b" . "\x08", 0, "US-ASCII");
+        if($is_gzip) {
+            $unzip_receive = gzdecode($receive);
+        }
+        else {
+            Log::systemLog('error', 'Error received message. Data not gzipped: '.$receive, 'Order Book');
+            $ret['method'] = 'error';
+            return $ret;
+        }
+        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' webSoket receive NATIVE from CoinEx = '. $unzip_receive, "Order Book");
+        $r = json_decode($unzip_receive, JSON_OBJECT_AS_ARRAY);
+        
         $ret = array();
-        if(isset($r['result'])) {
-            //PONG
-            if((is_string($r['result']) && $r['result']) == 'pong') {
-                $ret['method'] = 'pong';
-                if($r['error'] == null) {
-                    $ret['status'] = 1;
-                }
-                else {
-                    $ret['status'] = 0;
-                }
-                $ret['error'] = $r['error'];
-                $ret['id'] = (int)$r['id'];
-                return $ret;
-            }
+        
+        if(isset($r['message']) && isset($r['code'])) {
             //Success result
-            if(is_array($r['result']) && isset($r['result']['status'])) {
-                $ret['method'] = 'queryResponse';
-                if($r['error'] == null && $r['result']['status'] == 'success' ) {
-                    $ret['status'] = 1;
+            if($r['code'] == "0" && $r['message'] == "OK") {
+                //PONG
+                if(isset($r['data']['result'])) {
+                    if($r['data']['result'] == 'pong') {
+                        $ret['method'] = 'pong';
+                        $ret['status'] = 1;
+                        $ret['id'] = (int)$r['id'];
+                        return $ret;
+                    }
                 }
                 else {
-                    $ret['status'] = 0;
+                    $ret['method'] = 'queryResponse';
+                    $ret['id'] = (int)$r['id'];
+                    $ret['status'] = 1;
+                    return $ret;
                 }
-                $ret['error'] = $r['error'];
-                $ret['id'] = (int)$r['id'];
-                return $ret;
             }
         }
+
         if(isset($r['method'])) {
             switch ($r['method']) {
+                //Order book data
                 case 'depth.update':
                 default:
                     $ret['method'] = 'depth';
                     //parse data
                     $tmp = array();
-                    $tmp['diff'] = !(bool)$r['params'][0];
-                    $tmp['pair'] = $r['params'][2];
-                    if(is_array($r['params'][1])) {
-                        if(isset($r['params'][1]['asks'])) {
-                            $tmp['asks'] = $r['params'][1]['asks'];
-                        }
-                        else {
-                            $tmp['asks'] = array();
-                        }
-                        if(isset($r['params'][1]['bids'])) {
-                            $tmp['bids'] = $r['params'][1]['bids'];
-                        }
-                        else {
-                            $tmp['bids'] = array();
-                        }
-                        $tmp['last_price'] = $r['params'][1]['last'];
-                        $tmp['timestamp'] = $r['params'][1]['time']*1E3;
+                    $tmp['diff'] = !(bool)$r['data']['is_full'];
+                    $tmp['pair'] = $r['data']['market'];
+                    if(isset($r['data']['depth']['asks'])) {
+                        $tmp['asks'] = $r['data']['depth']['asks'];
                     }
+                    else {
+                        $tmp['asks'] = array();
+                    }
+                    if(isset($r['data']['depth']['bids'])) {
+                        $tmp['bids'] = $r['data']['depth']['bids'];
+                    }
+                    else {
+                        $tmp['bids'] = array();
+                    }
+                    if(isset($r['data']['depth']['last'])) {
+                        $tmp['last_price'] = $r['data']['depth']['last'];
+                    }
+                    if(isset($r['data']['depth']['updated_at'])) {
+                        $tmp['price_timestamp'] = $r['data']['depth']['updated_at']*1E3;
+                    }
+                    $tmp['timestamp'] = $this->getTonceU();
                     $ret['data'][] = $tmp;                    
                     $ret['id'] = (int)$r['id'];
             }
@@ -590,19 +599,47 @@ class CoinEx implements ExchangeInterface {
         return false;
     }
     public function webSocketMultiSubsribeDepth($client_ws, $data, $previous=false) {
-        //$previous not need for CoinEx
         $c = $this->getWebSoketCount();
         if(!empty($data)) {
+            //unsubscribe
+            if($previous !== false) {
+                $msg = array();
+                $params = array();
+                $msg['method'] = "depth.unsubscribe";
+                $msg['id'] = $c;
+                $tiker = array();
+                $i=0;
+                foreach ($previous as $od) {
+                    $found = false;
+                    foreach ($data as $d) {
+                        if($d['id'] == $od['id']) {
+                            $found = true;
+                        }
+                    }
+                    if($found === false) {
+                        $tiker[] = $od['name'];
+                        $i++;
+                    }
+                }
+                $msg['params'] = array("market_list"=>$tiker);
+
+                if(!empty($tiker)) {
+                    $msg_json = json_encode($msg);
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, "Order Book");
+                    $client_ws->text($msg_json);
+                }
+            }
+            //subscribe
             $msg = array();
             $params = array();
-            $msg['method'] = "depth.subscribe_multi";           
+            $msg['method'] = "depth.subscribe";           
             if(is_array($data)) {
                 foreach ($data as $dd) {
-                    $tmp = array($dd['name'], 5, "0", true);
+                    $tmp = array($dd['name'], 50, "0", false);
                     $params[] = $tmp;
                 }
             }
-            $msg['params'] = $params;
+            $msg['params'] = array("market_list" => $params);
             $msg['id'] = $c;           
             $msg_json = json_encode($msg);
             if(empty($params)) {

@@ -359,7 +359,7 @@ class ctdaemon {
                 }
                 while(!$ws);
             }
-        }
+        }       
         //
         while(1) {
             $this->timestamp = microtime(true)*1E6;           
@@ -418,7 +418,7 @@ class ctdaemon {
                     if($ping) {
                         $ob->timer_update_ob_ping_ts = microtime(true)*1E6;
                         $ping = $exchange->webSocketPing($ws);
-                        Log::systemLog('debug', 'Exchange order book proc='. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' send PING');
+                        Log::systemLog('debug', 'Exchange order book proc='. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' send PING',"Order Book");
                     }
                 }
                 //control timeout and false receive. Only websocket
