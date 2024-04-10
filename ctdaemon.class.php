@@ -404,6 +404,7 @@ class ctdaemon {
                         Log::systemLog('debug', 'Echange order book process = '. getmypid().' New subscribe data='. json_encode($tasks), "Order Book");
                         if($exchange->isEnableWebsocket()) {
                             $scb = $exchange->webSocketMultiSubsribeDepth($ws,$tasks,$previous_subscribe);
+                            $scbbo = $exchange->webSocketMultiSubsribeBBO($ws,$tasks,$previous_subscribe);
                         }
                     }
                 }
@@ -445,6 +446,7 @@ class ctdaemon {
                     if($ws) {
                         $time_count_timeout = 0;
                         $scb = $exchange->webSocketMultiSubsribeDepth($ws, $ob->subscribe);
+                        $scbbo = $exchange->webSocketMultiSubsribeBBO($ws,$tasks,$previous_subscribe);
                         Log::systemLog('info', 'Echange order book process = '. getmypid().' New subscribe data='. json_encode($ob->subscribe), "Order Book");
                     }
                     else {

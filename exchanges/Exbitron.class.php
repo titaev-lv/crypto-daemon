@@ -209,6 +209,10 @@ class Exbitron implements ExchangeInterface {
         
         return false;
     }
+    public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
+        
+        return false;
+    }
     public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
         
         return false;

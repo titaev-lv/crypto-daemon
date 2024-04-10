@@ -36,6 +36,7 @@ interface ExchangeInterface {
     public function webSocketPing($client_ws);
     public function webSocketParse($receive);
     public function webSocketMultiSubsribeDepth($client_ws, $data, $previous_subscribe); 
+    public function webSocketMultiSubsribeBBO($client_ws, $data, $previous_subscribe);
     public function restMarketDepth ($symbol, $merge, $limit);
     public function restMarketDepthParse($receive);
 }

@@ -713,6 +713,10 @@ class Poloniex implements ExchangeInterface {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
         return false;
     }
+    public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
+        
+        return false;
+    }
     public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
         $str = "scale=".$merge."&limit=".$limit;
         $json_response = $this->request($this->base_url.'/markets/'.$symbol.'/orderBook', $str, 'GET');
