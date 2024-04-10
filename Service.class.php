@@ -176,7 +176,7 @@ class Service {
                             LEFT JOIN 
                                 `UPDATE_STATUS` us ON us.`COMPONENT` = 'interval_update_spot_trade_pair_fee'
                             LEFT JOIN 
-                                SPOT_TRADE_PAIR_FEE f ON f.TRADE_PAIR_ID = summ.PAIR_ID
+                                SPOT_TRADE_PAIR_FEE f ON (f.TRADE_PAIR_ID = summ.PAIR_ID AND EA_ID = f.EAID)
                         )
                     SELECT 
                         PAIR_ID,
