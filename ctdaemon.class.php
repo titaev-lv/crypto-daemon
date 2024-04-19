@@ -573,7 +573,7 @@ class ctdaemon {
         $DB = DB::init($this->getDBEngine(),$this->getDBCredentials());
         Log::systemLog('info',"Process type \"Price Monitor\" STARTED pid=".getmypid(), "Price Monitor");
         $price = new PriceLog();
-        $this->start_time = microtime(true);
+        $this->start = microtime(true);
         while(1) {
             $this->timestamp = microtime(true)*1E6;    
             //For every process need update ProcTree for main process Every 1 second
