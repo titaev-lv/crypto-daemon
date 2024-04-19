@@ -3,3 +3,4 @@ ctdaemon.ini
 /ftok/*.ftok
 /run/*
 /log/*
+/log/error.log
