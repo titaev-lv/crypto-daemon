@@ -1,6 +1,6 @@
 #!/bin/bash
-PHP="/usr/bin/php"
-DIR="/server/web/cryptotrade/daemon"
+PHP="/usr/local/bin/php"
+DIR="/home/ctdaemon/ctdaemon"
 PID=$DIR"/run/ctdaemon.pid"
 set -e
 
