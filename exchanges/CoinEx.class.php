@@ -655,7 +655,16 @@ class CoinEx implements ExchangeInterface {
         return false;
     }
     public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
-        
+        $c = $this->getWebSoketCount();
+        if(!empty($data)) {
+            //unsubscribe
+            
+            //subscribe
+            
+            
+            return true;
+        }
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
     public function restMarketDepth ($symbol, $interval="0", $limit= 20) {
