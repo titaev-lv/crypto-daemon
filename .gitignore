@@ -1,5 +1,5 @@
 ctdaemon.ini
 /nbproject/*
 /ftok/*.ftok
-/run/*
-/log/*
+/run/*.pid
+/log/*.log
