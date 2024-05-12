@@ -565,6 +565,18 @@ class CoinEx implements ExchangeInterface {
         if(isset($r['method'])) {
             switch ($r['method']) {
                 //Order book data
+                case 'bbo.update':
+                    $ret['method'] = 'bbo';
+                    $tmp['pair'] = $r['data']['market'];
+                    $tmp['ask_price'] = $r['data']['best_ask_price']; 
+                    $tmp['ask_volume'] = $r['data']['best_ask_size'];
+                    $tmp['bid_price'] = $r['data']['best_bid_price']; 
+                    $tmp['bid_volume'] = $r['data']["best_bid_size"];
+                    $tmp['price_timestamp'] = $r['data']['updated_at']*1E3;
+                    $tmp['timestamp'] = $this->getTonceU();
+                    $ret['data'][] = $tmp;                    
+                    $ret['id'] = (int)$r['id'];
+                    break;
                 case 'depth.update':
                 default:
                     $ret['method'] = 'depth';
@@ -658,10 +670,53 @@ class CoinEx implements ExchangeInterface {
         $c = $this->getWebSoketCount();
         if(!empty($data)) {
             //unsubscribe
-            
+            if($previous !== false) {
+                $msg = array();
+                $params = array();
+                $msg['method'] = "bbo.unsubscribe";
+                $msg['id'] = $c;
+                $tiker = array();
+                $i=0;
+                foreach ($previous as $od) {
+                    $found = false;
+                    foreach ($data as $d) {
+                        if($d['id'] == $od['id']) {
+                            $found = true;
+                        }
+                    }
+                    if($found === false) {
+                        $tiker[] = $od['name'];
+                        $i++;
+                    }
+                }
+                $msg['params'] = array("market_list"=>$tiker);
+
+                if(!empty($tiker)) {
+                    $msg_json = json_encode($msg);
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe BBO MSG '.$msg_json, "Order Book");
+                    $client_ws->text($msg_json);
+                }
+            }
             //subscribe
+            $msg = array();
+            $params = array();
+            $msg['method'] = "bbo.subscribe";           
+            if(is_array($data)) {
+                foreach ($data as $dd) {
+                    $tmp = $dd['name'];
+                    $params[] = $tmp;
+                }
+            }
+            $msg['params'] = array("market_list" => $params);
+            $msg['id'] = $c;           
+            $msg_json = json_encode($msg);
+            if(empty($params)) {
+                Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data BBO is empty', "Order Book");
+                return false;
+            }
             
-            
+            $client_ws->text($msg_json);
+            Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe BBO msg='.$msg_json, "Order Book");
             return true;
         }
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");

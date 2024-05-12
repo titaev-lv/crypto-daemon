@@ -19,11 +19,16 @@ function sigHandler($signal) {
                                 foreach ($pval['subscribe'] as $s) {
                                     $hash = hash('xxh3', $pval['exchange_id'].'|'.$pval['market'].'|'.$s['id']);
                                     $id = ftok(__DIR__."/ftok/".$hash.".ftok", 'A');
+                                    $id2 = ftok(__DIR__."/ftok/".$hash.".ftok", 'B');
                                     $shmId = shm_attach($id);
+                                    $shmId2 = shm_attach($id2);
                                     shm_remove($shmId);
+                                    shm_remove($shmId2);
                                     //destroy semaphores
                                     $semId = sem_get($id);
+                                    $semId2 = sem_get($id2);
                                     sem_remove($semId);
+                                    sem_remove($semId2);
                                     Log::systemLog(4,"Destroy memory ".$hash." order book");
                                 }
                             }

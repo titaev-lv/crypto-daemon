@@ -379,5 +379,60 @@ class OrderBook {
         //Log::systemLog('debug', 'READ TIME Order Book RAM '.$time.'s');
         return $data_arr; 
     }
+    public static function writeBBORAM($data) {
+        $path = __DIR__."/ftok/".$data['ftok_crc'].'.ftok';
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'B');
+        $data_json = json_encode($data);
+        
+        //Semaphore
+        $semId = sem_get($id);
+        sem_acquire($semId);
+        $shmId = shm_attach($id, strlen($data_json)+4096);
+        $var = 1;
+        shm_put_var($shmId, $var, $data_json);
+        shm_detach($shmId);
+        sem_release($semId);
+        return true;
+    }
+    public static function readBBORAM($hash) {
+        $path = __DIR__."/ftok/".$hash.'.ftok';
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'B');
+        //set semaphore
+        $semId = sem_get($id);
+        sem_acquire($semId);
+        //read segment
+        $shmId = shm_attach($id);
+        $var = 1;
+        $data = '';
+        if(shm_has_var($shmId, $var)) {
+            $data = shm_get_var($shmId, $var);
+        } 
+        else {
+            shm_detach($shmId);
+            sem_release($semId);
+            return false;
+        }
+        shm_detach($shmId);
+        sem_release($semId);
+        if(!empty($data)) {
+            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+            return $data_arr;
+        }
+        else {
+            return false;
+        }
+    }
 }
 

@@ -477,18 +477,36 @@ class ctdaemon {
                                     //Write data into RAM
                                     if($found_sunscribe === true) {
                                         $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
-                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return_merge), "Order Book");                                                     
                                         $ob->writeDepthRAM($return_merge);
+                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse DEPTH '. json_encode($return_merge), "Order Book");                                                     
+                                    }
+                                    break;
+                                case 'bbo':
+                                    //search in subscribe array
+                                    $found_sunscribe = false;
+                                    if(is_array($ob->subscribe)) {
+                                        foreach ($ob->subscribe as $s) {
+                                            foreach ($return['data'] as $d) {
+                                                if($s['name'] == $d['pair']) {
+                                                    $found_sunscribe = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if($found_sunscribe === true) {
+                                        $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
+                                        $ob->writeBBORAM($return_merge);
+                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse BBO '. json_encode($return_merge), "Order Book");   
                                     }
                                     break;
                                 case 'pong':
                                     //update all pair timestamp
                                     $ob->writeDepthRAMupdatePong();
-                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse PONG '. json_encode($return), "Order Book");
                                     break;
                                 case 'ping':
                                     $ob->writeDepthRAMupdatePing();
-                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse '. json_encode($return), "Order Book");
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse PING '. json_encode($return), "Order Book");
                                     $msg = array();
                                     $msg['pong'] = $return['timestamp'];  
                                     $msg_json = json_encode($msg);
