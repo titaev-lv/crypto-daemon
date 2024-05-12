@@ -496,7 +496,7 @@ class ctdaemon {
                                     if($found_sunscribe === true) {
                                         $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
                                         $ob->writeBBORAM($return_merge);
-                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse BBO '. json_encode($return_merge), "Order Book");   
+                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' webSoket Receive parse BBO '. json_encode($return_merge), "Order Book");  
                                     }
                                     break;
                                 case 'pong':

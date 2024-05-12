@@ -631,6 +631,10 @@ class KuCoin implements ExchangeInterface {
         $time = new DateTime();
         return $time->format('U')*1000;
     }
+    private function getTimestampU () {
+        $time = new DateTime();
+        return $time->format('Uu');
+    }
     public function getLastError(){
         return $this->last_erorr;
     }
@@ -841,9 +845,25 @@ class KuCoin implements ExchangeInterface {
                     $tmp['asks'] = $r['data']['asks'];
                     $tmp['bids'] = $r['data']['bids'];
                     $tmp['last_price'] = null;
-                    $tmp['timestamp'] = $r['data']['timestamp']*1E3;
+                    $tmp['price_timestamp'] = $r['data']['timestamp']*1E3;
+                    $tmp['timestamp'] = $this->getTimestampU();
                     $ret['id'] = null;
                     $ret['data'][] = $tmp;   
+                    return $ret;
+                }
+                if($r['subject'] == 'level1' && strstr($r['topic'], '/spotMarket/level1')) {
+                    $ret['method'] = 'bbo';
+                    $tmp = array();
+                    $topic_arr = explode(":", $r['topic']);
+                    $tmp['pair'] = $topic_arr[1];
+                    $tmp['ask_price'] = $r['data']['asks'][0]; 
+                    $tmp['ask_volume'] = $r['data']['asks'][1];
+                    $tmp['bid_price'] = $r['data']['bids'][0]; 
+                    $tmp['bid_volume'] = $r['data']["bids"][1];
+                    $tmp['price_timestamp'] = $r['data']['timestamp']*1E3;
+                    $tmp['timestamp'] = $this->getTimestampU();
+                    $ret['data'][] = $tmp;                    
+                    $ret['id'] = null;
                     return $ret;
                 }
             }
@@ -913,8 +933,130 @@ class KuCoin implements ExchangeInterface {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
         return false;
     }
+    public function webSocketMultiSubsribeDepth5($client_ws, $data, $previous=false) {
+        $c = $this->getWebSoketCount();
+        $msg = array();
+        if(!empty($data)) {
+            //unsubscribe
+            if($previous !== false) {
+                $msg = array();
+                $msg['id'] = $c;
+                $msg['type'] = "unsubscribe";
+                $tiker = '/spotMarket/level2Depth5:';
+                $i=0;
+                $found_somthing = false;
+                foreach ($previous as $od) {
+                    $found = false;
+                    foreach ($data as $d) {
+                        if($d['id'] == $od['id']) {
+                            $found = true;
+                        }
+                    }
+                    if($found === false) {
+                        if($i > 0) {
+                            $tiker .= ',';
+                        }
+                        $tiker .= $od['name'];
+                        $found_somthing = true;
+                        $i++;
+                    }
+                }
+                $msg['topic'] = $tiker;
+                $msg['privateChannel'] = false;
+                $msg['response'] = true;
+                if($found_somthing == true) {
+                    $msg_json = json_encode($msg);
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, "Order Book");
+                    $client_ws->text($msg_json);
+                }
+            }
+            //subscribe
+            $c = $this->getWebSoketCount();
+            $msg = array();
+            $msg['id'] = $c;
+            $msg['type'] = "subscribe";
+            //$tiker = '/market/level2:';
+            $tiker = '/spotMarket/level2Depth5:';
+            $i=0;
+            foreach ($data as $d) {
+                if($i > 0) {
+                    $tiker .= ',';
+                }
+                $tiker .= $d['name'];
+                $i++;
+            }
+            $msg['topic'] = $tiker;
+            $msg['privateChannel'] = false;
+            $msg['response'] = true;
+            $msg_json = json_encode($msg);
+            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe MSG '.$msg_json, "Order Book");
+            $client_ws->text($msg_json);
+            return true;
+        }
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
+        return false;
+    }
     public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
-        
+        $c = $this->getWebSoketCount();
+        $msg = array();
+        if(!empty($data)) {
+            //unsubscribe
+            if($previous !== false) {
+                $msg = array();
+                $msg['id'] = $c;
+                $msg['type'] = "unsubscribe";
+                $tiker = '/spotMarket/level1:';
+                $i=0;
+                $found_somthing = false;
+                foreach ($previous as $od) {
+                    $found = false;
+                    foreach ($data as $d) {
+                        if($d['id'] == $od['id']) {
+                            $found = true;
+                        }
+                    }
+                    if($found === false) {
+                        if($i > 0) {
+                            $tiker .= ',';
+                        }
+                        $tiker .= $od['name'];
+                        $found_somthing = true;
+                        $i++;
+                    }
+                }
+                $msg['topic'] = $tiker;
+                $msg['privateChannel'] = false;
+                $msg['response'] = true;
+                if($found_somthing == true) {
+                    $msg_json = json_encode($msg);
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe BBO MSG '.$msg_json, "Order Book");
+                    $client_ws->text($msg_json);
+                }
+            }
+            //subscribe
+            $c = $this->getWebSoketCount();
+            $msg = array();
+            $msg['id'] = $c;
+            $msg['type'] = "subscribe";
+            //$tiker = '/market/level2:';
+            $tiker = '/spotMarket/level1:';
+            $i=0;
+            foreach ($data as $d) {
+                if($i > 0) {
+                    $tiker .= ',';
+                }
+                $tiker .= $d['name'];
+                $i++;
+            }
+            $msg['topic'] = $tiker;
+            $msg['privateChannel'] = false;
+            $msg['response'] = true;
+            $msg_json = json_encode($msg);
+            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe BBO MSG '.$msg_json, "Order Book");
+            $client_ws->text($msg_json);
+            return true;
+        }
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
     public function restMarketDepth ($symbol, $merge="0", $limit= 5) {

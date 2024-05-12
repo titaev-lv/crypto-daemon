@@ -380,7 +380,7 @@ class OrderBook {
         return $data_arr; 
     }
     public static function writeBBORAM($data) {
-        $path = __DIR__."/ftok/".$data['ftok_crc'].'.ftok';
+        $path = __DIR__."/ftok/".$data['data'][0]['ftok_crc'].'.ftok';
         if(!is_file($path)) {
             $file = fopen($path, 'w');
             if($file){
