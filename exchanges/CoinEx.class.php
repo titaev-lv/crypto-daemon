@@ -647,7 +647,7 @@ class CoinEx implements ExchangeInterface {
             $msg['method'] = "depth.subscribe";           
             if(is_array($data)) {
                 foreach ($data as $dd) {
-                    $tmp = array($dd['name'], 50, "0", false);
+                    $tmp = array($dd['name'], 20, "0", false);
                     $params[] = $tmp;
                 }
             }

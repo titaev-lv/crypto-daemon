@@ -628,11 +628,11 @@ class KuCoin implements ExchangeInterface {
         return false;
     }
     private function getTimestamp () {
-        $time = new DateTime();
+        $time = new DateTime("now",new DateTimeZone('UTC'));
         return $time->format('U')*1000;
     }
     private function getTimestampU () {
-        $time = new DateTime();
+        $time = new DateTime("now",new DateTimeZone('UTC'));
         return $time->format('Uu');
     }
     public function getLastError(){
@@ -879,7 +879,7 @@ class KuCoin implements ExchangeInterface {
                 $msg = array();
                 $msg['id'] = $c;
                 $msg['type'] = "unsubscribe";
-                $tiker = '/spotMarket/level2Depth5:';
+                $tiker = '/spotMarket/level2Depth50:';
                 $i=0;
                 $found_somthing = false;
                 foreach ($previous as $od) {

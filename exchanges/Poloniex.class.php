@@ -140,10 +140,13 @@ class Poloniex implements ExchangeInterface {
         }
     }
     private function getTonce() {
-        $time = new DateTime();
+        $time = new DateTime("now",new DateTimeZone('UTC'));
         return $time->format('U')*1000;
     }
-
+    private function getTonceU() {
+        $time = new DateTime("now", new DateTimeZone('UTC'));
+        return $time->format('Uu');
+    }
     public function syncSpotAllTradePair() {
         global $DB;
 
@@ -667,6 +670,32 @@ class Poloniex implements ExchangeInterface {
         //stream
         if(!isset($r['event']) && isset($r['channel']) && isset($r['data'])) {
             switch ($r['channel']) {
+                case 'book_lv2':
+                    $ret['method'] = 'depth';
+                    $tmp = array();
+                    $tmp['pair'] = $r['data'][0]['symbol'];
+                    switch($r['action']) {
+                        case 'snapshot':
+                            $tmp['diff'] = false;
+                            $tmp['asks'] = $r['data'][0]['asks'];
+                            $tmp['bids'] = $r['data'][0]['bids'];
+                            break;
+                        case 'update':
+                        default:
+                            $tmp['diff'] = true;
+                            if(isset($r['data'][0]['asks'])) {
+                                $tmp['asks'] = $r['data'][0]['asks'];
+                            }
+                            if(isset($r['data'][0]['bids'])) {
+                                $tmp['bids'] = $r['data'][0]['bids'];
+                            }
+                    }
+                    $tmp['last_price'] = null;
+                    $tmp['price_timestamp'] = $r['data'][0]['ts']*1E3;
+                    $tmp['timestamp'] = $this->getTonceU();
+                    $ret['data'][] = $tmp;                    
+                    $ret['id'] = (int)$r['data'][0]['id'];
+                    break;
                 case 'book':
                 default:
                     $ret['method'] = 'depth';
@@ -677,7 +706,8 @@ class Poloniex implements ExchangeInterface {
                     $tmp['asks'] = $r['data'][0]['asks'];
                     $tmp['bids'] = $r['data'][0]['bids'];
                     $tmp['last_price'] = null;
-                    $tmp['timestamp'] = $r['data'][0]['ts']*1E3;
+                    $tmp['price_timestamp'] = $r['data'][0]['ts']*1E3;
+                    $tmp['timestamp'] = $this->getTonceU();
                     $ret['data'][] = $tmp;                    
                     $ret['id'] = (int)$r['data'][0]['id'];
             }
@@ -685,7 +715,7 @@ class Poloniex implements ExchangeInterface {
         }
         return false;
     }
-    public function webSocketMultiSubsribeDepth($client_ws, $data, $previous=false) {
+    public function webSocketMultiSubsribeDepth5($client_ws, $data, $previous=false) {
         //$previous not need for Poloniex
         //$c = $this->getWebSoketCount();
         if(!empty($data)) {
@@ -713,8 +743,35 @@ class Poloniex implements ExchangeInterface {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
         return false;
     }
+    public function webSocketMultiSubsribeDepth($client_ws, $data, $previous=false) {
+        //$previous not need for Poloniex
+        //$c = $this->getWebSoketCount();
+        if(!empty($data)) {
+            $msg = array();
+            $msg['event'] = "subscribe";           
+            $msg['channel'] = array("book_lv2");
+            $tmp = array();
+            if(is_array($data)) {
+                foreach ($data as $dd) {
+                    $tmp[] = $dd['name'];
+                }
+            }    
+            $msg['symbols'] = $tmp;
+            //$msg['depth'] = 5;
+            $msg_json = json_encode($msg);
+            if(empty($tmp)) {
+                Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data is empty', "Order Book");
+                return false;
+            }
+            
+            $client_ws->text($msg_json);
+            Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe msg='.$msg_json, "Order Book");
+            return true;
+        }
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
+        return false;
+    }
     public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
-        
         return false;
     }
     public function restMarketDepth ($symbol, $merge="0", $limit= 5) {

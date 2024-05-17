@@ -133,7 +133,11 @@ class Huobi implements ExchangeInterface {
         $time = new DateTime("now",new DateTimeZone('UTC'));
         return $time->format('Y-m-d\TH:i:s');
     }
-
+    private function getTonceU() {
+        $time = new DateTime("now", new DateTimeZone('UTC'));
+        return $time->format('Uu');
+    }
+    
     public function syncSpotAllTradePair() {
         global $DB;
 
@@ -632,11 +636,23 @@ class Huobi implements ExchangeInterface {
                 $tmp['asks'] = $r['tick']['asks'];
                 $tmp['bids'] = $r['tick']['bids'];
                 $tmp['last_price'] = null;
-                $tmp['timestamp'] = $r['ts']*1E3;
-                $ret['id'] = $r['tick']['seqNum'];
+                $tmp['price_timestamp'] = $r['ts']*1E3;
+                $tmp['timestamp'] = $this->getTonceU();
+                $ret['id'] = (int)$r['tick']['seqNum'];
                 $ret['data'][] = $tmp;
             }
-            
+            if($chdata[0] == 'market' && $chdata[2] == 'bbo') {
+                $ret['method'] = 'bbo';
+                $tmp['pair'] = $chdata[1];
+                $tmp['ask_price'] = $r['tick']['ask']; 
+                $tmp['ask_volume'] = $r['tick']['askSize'];
+                $tmp['bid_price'] = $r['tick']['bid']; 
+                $tmp['bid_volume'] = $r['tick']["bidSize"];
+                $tmp['price_timestamp'] = $r['ts']*1E3;
+                $tmp['timestamp'] = $this->getTonceU();
+                $ret['id'] = 0;
+                $ret['data'][] = $tmp;                    
+            }
             return $ret;
         }
         return false;
@@ -657,7 +673,7 @@ class Huobi implements ExchangeInterface {
                     if($found === false) {
                         $msg = array();
                         $c = $this->getWebSoketCount();
-                        $msg['unsub'] = "market.".$od['name'].".mbp.refresh.5";  
+                        $msg['unsub'] = "market.".$od['name'].".mbp.refresh.20";  
                         $msg['id'] = $c;
                         $msg_json = json_encode($msg);
                         $client_ws->text($msg_json);
@@ -683,7 +699,43 @@ class Huobi implements ExchangeInterface {
         return false;
     }
     public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
-        
+        $c = $this->getWebSoketCount();
+        if(!empty($data)) {
+            //unsubscribe
+            if($previous !== false) {
+                foreach ($previous as $od) {
+                    $found = false;
+                    foreach ($data as $d) {
+                        if($d['id'] == $od['id']) {
+                            $found = true;
+                        }
+                    }
+                    if($found === false) {
+                        $msg = array();
+                        $c = $this->getWebSoketCount();
+                        $msg['unsub'] = "market.".$od['name'].".bbo";  
+                        $msg['id'] = $c;
+                        $msg_json = json_encode($msg);
+                        $client_ws->text($msg_json);
+                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' unsubscribe BBO msg = '.$msg_json, "Order Book");
+                    }
+                }
+            }
+            //subscribes
+            if(is_array($data)) {
+                foreach ($data as $dd) {
+                    $msg = array();
+                    $c = $this->getWebSoketCount();
+                    $msg['sub'] = "market.".$dd['name'].".bbo";  
+                    $msg['id'] = $c;
+                    $msg_json = json_encode($msg);
+                    $client_ws->text($msg_json);
+                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe BBO msg = '.$msg_json, "Order Book");
+                }
+            }
+            return true;
+        }
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
     public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
@@ -715,7 +767,8 @@ class Huobi implements ExchangeInterface {
                     $tmp['asks'] = $r['data']['asks'];
                     $tmp['bids'] = $r['data']['bids'];
                     $tmp['last_price'] = $r['data']['last'];
-                    $tmp['timestamp'] = $r['data']['time']*1E3;
+                    $tmp['price_timestamp'] = $r['data']['time']*1E3;
+                    $tmp['timestamp'] = $this->getTonceU();
                     $ret['data'][] = $tmp;                    
                     $ret['id'] = 0;
                     return $ret;
