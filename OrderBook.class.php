@@ -431,6 +431,8 @@ class OrderBook {
             return $data_arr;
         }
         else {
+            //$depth = self::readDepthRAM($hash);
+            //
             return false;
         }
     }

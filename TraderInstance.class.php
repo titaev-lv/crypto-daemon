@@ -253,6 +253,9 @@ class TraderInstance {
     }  
     public function readOrderBook() {
         $ob = OrderBook::readDepthRAM($this->orderbook_address);
+        $bbo = OrderBook::readBBORAM($this->orderbook_address);
+        Log::systemLog('debug', "BBO RAM DATA ".$this->orderbook_address.'  '. json_encode($bbo), "Trader");
+        Log::systemLog('debug', "DEPTH RAM DATA ".$this->orderbook_address.'  '. json_encode($ob), "Trader");
         $this->orderbook = $ob;
         return true;
     }

@@ -962,7 +962,7 @@ class ctdaemon {
                                 $trade_allow = true;
                             }
                             else {
-                                usleep(5000);
+                                usleep(4500);
                             }
                         }
                         while($trade_allow !== true);
