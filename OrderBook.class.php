@@ -388,7 +388,11 @@ class OrderBook {
             }
         }
         $id = ftok($path, 'B');
-        $data_json = json_encode($data);
+        $data_mod = array();
+        $data_mod = $data['data'][0];
+        unset($data_mod['pair_id']);
+        unset($data_mod['ftok_crc']);
+        $data_json = json_encode($data_mod);
         
         //Semaphore
         $semId = sem_get($id);
@@ -400,6 +404,7 @@ class OrderBook {
         sem_release($semId);
         return true;
     }
+    
     public static function readBBORAM($hash) {
         $path = __DIR__."/ftok/".$hash.'.ftok';
         if(!is_file($path)) {
@@ -422,7 +427,27 @@ class OrderBook {
         else {
             shm_detach($shmId);
             sem_release($semId);
-            return false;
+            Log::systemLog('debug', "BBO RAM DATA is empty, read from DEPTH hash=".$hash.' ', "Trader");
+            $data = self::readDepthRAM($hash);
+            if(empty($data)) {
+                return false;
+            }
+            //read from depht
+            $bbo = array();
+            $bbo['sys_pair'] = $data['sys_pair'];
+            $bbo['pair'] = $data['pair'];
+            $bbo['price_timestamp'] = $data['price_timestamp'];
+            $bbo['ask_price'] = $data['asks'][0][0];
+            $bbo['ask_volume'] = $data['asks'][0][1];  
+            $bbo['bid_price'] = $data['bids'][0][0];
+            $bbo['bid_volume'] =  $data['bids'][0][1];         
+            
+            $bbow = array();
+            $bbow['data'][0] = $bbo;
+            $bbow['data'][0]['ftok_crc'] = $hash;
+            self::writeBBORAM($bbow);
+            
+            return $bbo;
         }
         shm_detach($shmId);
         sem_release($semId);
@@ -431,8 +456,7 @@ class OrderBook {
             return $data_arr;
         }
         else {
-            //$depth = self::readDepthRAM($hash);
-            //
+            Log::systemLog('warn', "BBO RAM DATA is empty hash=".$hash.' ', "Trader");
             return false;
         }
     }

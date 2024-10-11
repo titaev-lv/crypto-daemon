@@ -279,12 +279,12 @@ class Huobi implements ExchangeInterface {
                 );
             }
             else {
-                Log::systemLog('error', 'Error request market fee Huobi for '.$pair.' '.$json_fee);
+                Log::systemLog('error', 'Error request market fee Huobi for '.$pair.' '.$json_fee, 'Service');
                 $this->lastError = 'Error request market fee Huobi for '.$pair.' '.$json_fee;
             }
         }
         else {
-             Log::systemLog('error', 'Error request market fee Huobi for '.$pair);
+             Log::systemLog('error', 'Error request market fee Huobi for '.$pair, 'Service');
              $this->lastError = 'Error request market fee Huobi for '.$pair;
         }
 
@@ -295,7 +295,7 @@ class Huobi implements ExchangeInterface {
         
         $json_coins = $this->request($this->base_url.'/v2/reference/currencies');
         if(empty($json_coins)) {
-            Log::systemLog('error', 'Error request Coin info for Huobi is failed');
+            Log::systemLog('error', 'Error request Coin info for Huobi is failed','Service');
             $this->lastError = 'Error request Coin info for Huobi is failed';
             return false;
         }
@@ -447,11 +447,11 @@ class Huobi implements ExchangeInterface {
                                 }
                                 else {
                                     if($chain_id == false) {
-                                        Log::systemLog('warn', 'Exchange Huobi failed detect chain by name '.$ch['displayName']);
+                                        Log::systemLog('warn', 'Exchange Huobi failed detect chain by name '.$ch['displayName'],'Service');
                                         $this->lastError = 'Exchange Huobi failed detect chain by name '.$ch['displayName'];
                                     }
                                     if($coin_id == false) {
-                                        Log::systemLog('warn', 'Exchange Huobi failed detect coin '.$dt['currency']);
+                                        Log::systemLog('warn', 'Exchange Huobi failed detect coin '.$dt['currency'],'Service');
                                         $this->lastError = 'Exchange Huobi failed detect coin '.$dt['currency'];
                                     }
                                 }

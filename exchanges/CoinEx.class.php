@@ -285,12 +285,12 @@ class CoinEx implements ExchangeInterface {
                 );
             }
             else {
-                Log::systemLog('error', 'Error request market fee CoinEx for '.$pair.' '.$json_fee);
+                Log::systemLog('error', 'Error request market fee CoinEx for '.$pair.' '.$json_fee, 'Service');
                 $this->lastError = 'Error request market fee CoinEx for '.$pair.' '.$json_fee;
             }
         }
         else {
-             Log::systemLog('error', 'Error request market fee CoinEx for '.$pair);
+             Log::systemLog('error', 'Error request market fee CoinEx for '.$pair, 'Service');
              $this->lastError = 'Error request market fee CoinEx for '.$pair;
         }
 
@@ -301,7 +301,7 @@ class CoinEx implements ExchangeInterface {
         
         $json_coins = $this->request($this->base_url.'/v1/common/asset/config');
         if(empty($json_coins)) {
-            Log::systemLog('error', 'Error request Coin info for CoinEx is failed');
+            Log::systemLog('error', 'Error request Coin info for CoinEx is failed','Service');
             $this->lastError = 'Error request Coin info for CoinEx is failed';
             return false;
         }
@@ -329,12 +329,12 @@ class CoinEx implements ExchangeInterface {
                     else {
                         if($coin_id == false) {
                             if($cd['asset'] !== 'BTT_OLD') {
-                                Log::systemLog('warn', 'Exchange CoinEx failed detect coin '.$cd['asset']);
+                                Log::systemLog('warn', 'Exchange CoinEx failed detect coin '.$cd['asset'],'Service');
                                 $this->lastError = 'Exchange CoinEx failed detect coin '.$cd['asset'];
                             }
                         }
                         if($chain_id == false) {
-                            Log::systemLog('warn', 'Exchange CoinEx failed detect chain by name '.$cd['chain']);
+                            Log::systemLog('warn', 'Exchange CoinEx failed detect chain by name '.$cd['chain'],'Service');
                             $this->lastError = 'Exchange CoinEx failed detect chain by name '.$cd['chain'];
                         }
 
@@ -405,12 +405,12 @@ class CoinEx implements ExchangeInterface {
                 return true;
             }
             else {
-                Log::systemLog('error', 'Exchange CoinEx for request by coins return code '.$coins['code']);
+                Log::systemLog('error', 'Exchange CoinEx for request by coins return code '.$coins['code'],'Service');
                 $this->lastError = 'Exchange CoinEx for request by coins return code '.$coins['code'];
             }
         }
         else {
-            Log::systemLog('error', 'Exchange CoinEx for request by coins return failed message');
+            Log::systemLog('error', 'Exchange CoinEx for request by coins return failed message','Service');
             $this->lastError = 'Exchange CoinEx for request by coins return failed message';
         }
         return false;

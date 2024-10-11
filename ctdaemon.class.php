@@ -1191,7 +1191,7 @@ class ctdaemon {
                         //Step 3
                         //Send new process info 
                         ServiceRAM::write($tpid,'create_trade_worker',$msg);
-                        Log::systemLog('debug', 'SEND to ServiceRAM command "create_trade_worker" to process = '. $tpid.' from pid = '.getmypid().' '. json_encode($msg));
+                        Log::systemLog('debug', 'SEND to ServiceRAM command "create_trade_worker" to process = '. $tpid.' from pid = '.getmypid().' '. json_encode($msg), "Trade Worker Monitor");
                     }
                 }
             }

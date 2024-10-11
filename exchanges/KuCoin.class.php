@@ -212,7 +212,7 @@ class KuCoin implements ExchangeInterface {
             "KC-API-SIGN"=>$this->sign($query_string,$time),     //The base64-encoded signature (see Signing a Message).
             "KC-API-TIMESTAMP"=>$time,                           //A timestamp for your request.
             "KC-API-PASSPHRASE"=>$this->getPassphrase(),         //The passphrase you specified when creating the API key.
-            "KC-API-KEY-VERSION"=>'2'                            //You can check the version of API key on the page of API Management
+            "KC-API-KEY-VERSION"=>'3'                            //You can check the version of API key on the page of API Management
         );
         //Log::systemLog('error', 'PAIR='.$pair .' PARAM ='. json_encode($header));
         
@@ -229,12 +229,12 @@ class KuCoin implements ExchangeInterface {
                 );
             }
             else {
-                Log::systemLog('error', 'Error request market fee KuCoin for '.$pair.' '.$json_fee);
+                Log::systemLog('error', 'Error request market fee KuCoin for '.$pair.' '.$json_fee, 'Service');
                 $this->lastError = 'Error request market fee KuCoin for '.$pair.' '.$json_fee;
             }
         }
         else {
-            Log::systemLog('error', 'Error request market fee Kucoin for '.$pair);
+            Log::systemLog('error', 'Error request market fee Kucoin for '.$pair, 'Service');
             $this->lastError = 'Error request market fee Kukoin for '.$pair;
         }
         return false;
@@ -245,7 +245,7 @@ class KuCoin implements ExchangeInterface {
         
         $json_coins = $this->request(preg_replace("/v1/",'v3',$this->base_url).'/currencies');
         if(empty($json_coins)) {
-            Log::systemLog('error', 'Error request Coin info for KuCoin is failed');
+            Log::systemLog('error', 'Error request Coin info for KuCoin is failed','Service');
             $this->lastError = 'Error request Coin info for KuCoin is failed';
             return false;
         }
@@ -525,11 +525,11 @@ class KuCoin implements ExchangeInterface {
                             }
                             else {
                                 if($coin_id == false) {
-                                    Log::systemLog('warn', 'Exchange KuCoin failed detect coin '.$cd['currency']);
+                                    Log::systemLog('warn', 'Exchange KuCoin failed detect coin '.$cd['currency'], 'Service');
                                     $this->lastError = 'Exchange KuCoin failed detect coin '.$cd['currency'];
                                 }
                                 if($chain_id == false) {
-                                    Log::systemLog('warn', 'Exchange KuCoin failed detect chain by name '.$ch['chainName']);
+                                    Log::systemLog('warn', 'Exchange KuCoin failed detect chain by name '.$ch['chainName'], 'Service');
                                     $this->lastError = 'Exchange KuCoin failed detect chain by name '.$ch['chainName'];
                                 }
                             }
@@ -617,12 +617,12 @@ class KuCoin implements ExchangeInterface {
                 }
             }
             else {
-                Log::systemLog('error', 'Exchange KuCoin for request by coins return code '.$coins['code']);
+                Log::systemLog('error', 'Exchange KuCoin for request by coins return code '.$coins['code'], 'Service');
                 $this->lastError = 'Exchange KuCoin for request by coins return code '.$coins['code'];
             }
         }
         else {
-            Log::systemLog('error', 'Exchange KuCoin for request by coins return failed message');
+            Log::systemLog('error', 'Exchange KuCoin for request by coins return failed message', 'Service');
             $this->lastError = 'Exchange KuCoin for request by coins return failed message';
         }
         return false;
@@ -738,6 +738,13 @@ class KuCoin implements ExchangeInterface {
         return true;
     }
     public function webSocketConnect($type=false) {
+        switch($type) {
+            case 'orderbook': 
+                $src = 'Order Book';
+                break;
+            default:
+                $src = '';
+        }
         //First get token
         $json_data = $this->request($this->base_url.'/bullet-public', false, 'POST');
         if($json_data) {
@@ -763,35 +770,28 @@ class KuCoin implements ExchangeInterface {
                             if(isset($r['id'])) {
                                 $this->websoket_conn_id = $r['id'];
                             }
-                            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' Connect to exchange KuCoin is true');
+                            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' Connect to exchange KuCoin is true',$src);
                             return $client;
                         }
                         catch (\WebSocket\TimeoutException $e) {
                             $src = '';
-                            switch($type) {
-                                case 'orderbook': 
-                                    $src = 'Order Book';
-                                    break;
-                                default:
-                                    $src = '';
-                            }
                             Log::systemLog('error', 'ERROR CONNECT to KuCoin exchange proc='. getmypid().'',$src);
                         }
                     }
                     return false;
                 }
                 else {
-                    Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error request connection token. Response code='.$json_data['code']);
+                    Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error request connection token. Response code='.$json_data['code'],$src);
                     return false;
                 }
             }
             else {
-                Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error request connection token. Faliled response json');
+                Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error request connection token. Faliled response json',$src);
                 return false;
             }
         }
         else {
-            Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error request connection token');
+            Log::systemLog('error', 'Child Order Book proc='. getmypid().' Error request connection token',$src);
             return false;
         }
         return false;

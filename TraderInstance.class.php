@@ -34,6 +34,7 @@ class TraderInstance {
     public $chain_send_out = false;
     
     public $orderbook = array();
+    public $bbo = array();
     private $orderbook_address = '';
     
     private $worker_address = '';
@@ -254,9 +255,10 @@ class TraderInstance {
     public function readOrderBook() {
         $ob = OrderBook::readDepthRAM($this->orderbook_address);
         $bbo = OrderBook::readBBORAM($this->orderbook_address);
-        Log::systemLog('debug', "BBO RAM DATA ".$this->orderbook_address.'  '. json_encode($bbo), "Trader");
-        Log::systemLog('debug', "DEPTH RAM DATA ".$this->orderbook_address.'  '. json_encode($ob), "Trader");
+        //Log::systemLog('debug', "BBO RAM DATA ".$this->orderbook_address.'  '. json_encode($bbo), "Trader");
+        //Log::systemLog('debug', "DEPTH RAM DATA ".$this->orderbook_address.'  '. json_encode($ob), "Trader");
         $this->orderbook = $ob;
+        $this->bbo = $bbo;
         return true;
     }
     public function requestMarketSell($arb_id, $volume) {

@@ -278,12 +278,12 @@ class Poloniex implements ExchangeInterface {
                 );
             }
             else {
-                Log::systemLog('error', 'Error request market fee Poloniex for '.$pair.' '.$json_fee);
+                Log::systemLog('error', 'Error request market fee Poloniex for '.$pair.' '.$json_fee, 'Service');
                 $this->lastError = 'Error request market fee Poloniex for '.$pair.' '.$json_fee;
             }
         }
         else {
-            Log::systemLog('error', 'Error request market fee Poloniex for '.$pair);
+            Log::systemLog('error', 'Error request market fee Poloniex for '.$pair, 'Service');
             $this->lastError = 'Error request market fee Poloniex for '.$pair;
         }
         
@@ -294,7 +294,7 @@ class Poloniex implements ExchangeInterface {
         
         $json_coins = $this->request($this->base_url.'/v2/currencies');
         if(empty($json_coins)) {
-            Log::systemLog('error', 'Error request Coin info for Poloniex is failed');
+            Log::systemLog('error', 'Error request Coin info for Poloniex is failed','Service');
             $this->lastError = 'Error request Coin info for Poloniex is failed';
             return false;
         }
@@ -310,6 +310,7 @@ class Poloniex implements ExchangeInterface {
                 if($c['delisted'] == false) {
                     $c_id = false;
                     $coin_id = false;
+                    $chain_id = false;
                     
                     switch($c['coin']) {
                         case 'ACH1':
@@ -449,17 +450,17 @@ class Poloniex implements ExchangeInterface {
                                     $tmp['withdrawal_fee'] = floatval($n['withdrawFee']);
                                     $data[] = $tmp;
                                 }
+                                if($chain_id == false) {
+                                    Log::systemLog('warn', 'Exchange Poloniex failed detect chain by name '.$n['blockchain'],'Service');
+                                    $this->lastError = 'Exchange Poloniex failed detect chain by name '.$n['blockchain'];
+                                }
                             }
                         }
                     }
                     
                     if($coin_id == false) {
-                        Log::systemLog('warn', 'Exchange Poloniex failed detect coin '.$c['coin']);
+                        Log::systemLog('warn', 'Exchange Poloniex failed detect coin '.$c['coin'],'Service');
                         $this->lastError = 'Exchange Poloniex failed detect coin '.$c['coin'];
-                    }
-                    if($chain_id == false) {
-                        Log::systemLog('warn', 'Exchange Poloniex failed detect chain by name '.$n['blockchain']);
-                        $this->lastError = 'Exchange Poloniex failed detect chain by name '.$n['blockchain'];
                     }
                 }   
             }
@@ -529,7 +530,7 @@ class Poloniex implements ExchangeInterface {
             }
         }
         else {
-            Log::systemLog('error', 'Exchange Poloniex for request by coins return failed message');
+            Log::systemLog('error', 'Exchange Poloniex for request by coins return failed message','Service');
             $this->lastError = 'Exchange Poloniex for request by coins return failed message';
         }
         return false;
