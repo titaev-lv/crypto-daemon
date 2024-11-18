@@ -29,6 +29,7 @@ require_once __DIR__.'/exchanges/Poloniex.class.php';
 require_once __DIR__.'/exchanges/Huobi.class.php';
 //
 require_once __DIR__.'/Log.class.php';
+require_once __DIR__.'/MathCalc.class.php';
 //VENDOR
 //webscocket
 require_once __DIR__.'/vendor/autoload.php';

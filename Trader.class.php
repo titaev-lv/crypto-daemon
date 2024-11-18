@@ -9,15 +9,17 @@ class Trader {
      * 20 - Error
      * 30 - High loss
     */
+    public $arb_trans_count = 0;
     private $trader_user_id = 0;
     public $trader_type = 0;
     private $max_amount_trade = "0";
-    private $fin_protection = false;
+    public $fin_protection = false;
+    public $bbo_only = true;
     
     public $arbitrage_id = 0;
-    private $pool = array();
+    public $pool = array();
     
-    public $timer_update_data = 60*1E6;
+    public $timer_update_data = 20*1E6;
     public $timer_update_data_ts = 0;
     private $limit_count_negative_trans = 3;
     
@@ -30,7 +32,8 @@ class Trader {
                     `UID`, 
                     `TYPE`,
                     `MAX_AMOUNT_TRADE`,
-                    `FIN_PROTECTION`
+                    `FIN_PROTECTION`,
+                    `BBO_ONLY`
                 FROM 
                     `TRADE` 
                 WHERE 
@@ -49,6 +52,7 @@ class Trader {
             $this->trader_type = (isset($tr[0]['TYPE'])) ? intval($tr[0]['TYPE']) : 0;           
             $this->max_amount_trade = (isset($tr[0]['MAX_AMOUNT_TRADE']) && !empty($tr[0]['MAX_AMOUNT_TRADE'])) ? (float)$tr[0]['MAX_AMOUNT_TRADE'] : 0.00;
             $this->fin_protection = (isset($tr[0]['FIN_PROTECTION'])) ? (bool)$tr[0]['FIN_PROTECTION'] : false;
+            $this->bbo_only = (isset($tr[0]['BBO_ONLY'])) ? (bool)$tr[0]['BBO_ONLY'] : true;
         }
         //Select data for create TraderInstances
         $sql_tri = "SELECT 
@@ -82,7 +86,8 @@ class Trader {
         global $DB;
         $sql = "SELECT 
                     `MAX_AMOUNT_TRADE`,
-                    `FIN_PROTECTION`
+                    `FIN_PROTECTION`,
+                    `BBO_ONLY`
                 FROM 
                     `TRADE` 
                 WHERE 
@@ -99,6 +104,7 @@ class Trader {
         if(is_array($tr)) {           
             $this->max_amount_trade = (isset($tr[0]['MAX_AMOUNT_TRADE']) && !empty($tr[0]['MAX_AMOUNT_TRADE'])) ? (float)$tr[0]['MAX_AMOUNT_TRADE'] : 0.00;
             $this->fin_protection = (isset($tr[0]['FIN_PROTECTION'])) ? (bool)$tr[0]['FIN_PROTECTION'] : false;
+            $this->bbo_only = (isset($tr[0]['BBO_ONLY'])) ? (bool)$tr[0]['BBO_ONLY'] : true;
         }
         
         //Select data for update TraderInstances
@@ -227,12 +233,41 @@ class Trader {
         //Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool), "Trader");
         return true;
     }
+    public function readBBOs() {
+        if(!empty($this->pool)) {
+            foreach ($this->pool as $k=>$v) {
+                $inst_obj = $this->fetchObjectPoolTraderInstace($k);
+                $ob_read = $inst_obj->readBBO();
+                if($ob_read) {
+                    $this->pushObjectPoolTraderInstace($k, $inst_obj);
+                }
+            }
+        }
+        //Log::systemLog('debug', 'POOL proc='. getmypid().' '.json_encode($this->pool), "Trader");
+        return true;
+    }
+    
+    public function getProfitablePair_Type1() {
+        $arb_avail_pairs = false;
+        $arb_positive_pairs = false;
+        
+        //All available pairs to sell/buy in array
+        $arb_avail_pairs = $this->getAvailablePairs_type_1_and_2();
+        if($arb_avail_pairs !== false && !empty($arb_avail_pairs)) {
+            //Calculate profit for all alailable pairs
+            $arb_calc_profit = $this->calc($arb_avail_pairs);
+
+            Log::systemLog('warn', 'PROFIT PAIRS '.json_encode($arb_calc_profit), "Trader");
+        }
+        return false;
+    }
+    
     public function calculateType_1() {
         $pairs = array();
         $deltas = array();
         //Detect all pairs
         if(!empty($this->pool) && count($this->pool) > 1) {
-            //вытягиваем в массив 
+            //Get it in array 
             $tmp = array();
             foreach ($this->pool as $k=>$v) {
                 $tmp[] = $k;
@@ -247,8 +282,8 @@ class Trader {
                 }
             }
             unset($tmp);
-        }
-        // Log::systemLog('warn', 'POOL'. json_encode($this->pool), "Trader");        
+        }   
+        // Log::systemLog('warn', 'ALANYZE PAIRS'. json_encode($pairs), "Trader");      
         if(!empty($pairs)) {
             foreach ($pairs as $p) {
                 $sell = $this->fetchObjectPoolTraderInstace($p[0]);
@@ -257,7 +292,7 @@ class Trader {
                 if(isset($sell->orderbook['bids']) && isset($sell->orderbook['asks']) && isset($buy->orderbook['bids']) && isset($buy->orderbook['asks'])) {
                     //Check timestamp
                     if(isset($sell->orderbook['timestamp']) && isset($buy->orderbook['timestamp']) && $sell->orderbook['timestamp'] && $buy->orderbook['timestamp']) {
-                        if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 7) {
+                        if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 6) {
                             //1 variants  
                             if((float)$sell->orderbook['bids'][0][0] > (float)$buy->orderbook['asks'][0][0]) {
                                 //calculate profit
@@ -447,6 +482,112 @@ class Trader {
                 $ret['profit'] = $delta;
                 return $ret;
             }
+        }
+        return false;
+    }
+    
+    private function getAvailablePairs_type_1_and_2() {
+        $pairs = array();
+        $pairs_out = array();
+        //Detect all pairs
+        if(!empty($this->pool) && count($this->pool) > 1) {
+            //Get it in array 
+            $tmp = array();
+            foreach ($this->pool as $k=>$v) {
+                $tmp[] = $k;
+                foreach ($this->pool as $n=>$m) {
+                    if(in_array($n, $tmp) && $n !== $k) {
+                        $t = array();
+                        $t[] = $k;
+                        $t[] = $n;
+                        $pairs[] = $t;
+                        unset($t);
+                    }
+                }
+            }
+            unset($tmp);
+            
+            foreach ($pairs as $p) {
+                $t = array();
+                $t['sell'] = $p[0];
+                $t['buy'] = $p[1];
+                $pairs_out[] = $t;
+                $t = array();
+                $t['sell'] = $p[1];
+                $t['buy'] = $p[0];
+                $pairs_out[] = $t;
+                unset($t);
+            }
+            // Log::systemLog('warn', 'ALANYZE PAIRS'. json_encode($pairs_out), "Trader"); 
+            //Example for 3 exchanges   
+            /*  [
+                    {
+                        "sell":"9f359ccde7def693",
+                        "buy":"6e58a6ae933bac4e"
+                    },
+                    {
+                        "sell":"6e58a6ae933bac4e",
+                        "buy":"9f359ccde7def693"
+                    },
+                ]*/
+            return $pairs_out;
+        }
+        return false;
+    }
+    private function calc($arb_pairs) {
+        if(!empty($arb_pairs)) {
+            foreach ($arb_pairs as $ins=>$p) {
+                $sell = $this->fetchObjectPoolTraderInstace($p['sell']);
+                $buy = $this->fetchObjectPoolTraderInstace($p['buy']);
+                
+                //if(isset($sell->orderbook['bids']) && isset($sell->orderbook['asks']) && isset($buy->orderbook['bids']) && isset($buy->orderbook['asks'])) {
+                    //Check timestamp
+                    //if(isset($sell->orderbook['timestamp']) && isset($buy->orderbook['timestamp']) && $sell->orderbook['timestamp'] && $buy->orderbook['timestamp']) {
+                        //if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 6) {
+                            //BBO is true. Use only best price
+                            $sell_price =  number_format($sell->bbo['bid_price'], 12, '.','');
+                            $buy_price = number_format($buy->bbo['ask_price'], 12, '.','');
+                            $fee_sell = bcmul($sell_price, (string)$sell->taker_fee, 12);
+                            $fee_buy = bcmul($buy_price, (string)$buy->taker_fee, 12);
+                            //Delta price with commission
+                            $delta = number_format(bcsub(bcsub($sell_price, $fee_sell,12), bcadd($buy_price,$fee_buy,12),12), 12, '.','');
+                            //Max volume
+                            $volume = ((float)$sell->bbo['bid_volume'] < (float)$buy->bbo['ask_volume']) ? $sell->bbo['bid_volume'] : $buy->bbo['ask_volume'];
+                            $volume = number_format($volume, 12, '.','');
+                            $arb_pairs[$ins]['bbo']['profit'] = $delta;
+                            $arb_pairs[$ins]['bbo']['volume'] = $volume;
+                            //normal mode
+                            if($this->bbo_only === false) {
+                                
+                            }
+                            
+                            //finance protection
+                            if($this->bbo_only === false) {
+                                
+                            }
+                            
+                        //}
+                    //}
+              //  }
+                
+
+                Log::systemLog('warn', 'CALC ALANYZE PAIRS'. json_encode($p).' sell='.$sell_price.' ('.$sell->exchange_name.')   buy='.$buy_price .'('.$buy->exchange_name.') profit='.$delta.' volume='.$volume, "Trader"); 
+
+
+                /*if($this->fin_protection) {
+                    $sell_price = number_format($sell->orderbook['bids'][0][0], 12, '.','');
+                    $buy_price = number_format($buy->orderbook['asks'][0][0], 12, '.','');    
+                }
+                else {
+                    $sell_price = number_format($sell->bbo['bid_price'][0][0], 12, '.','');
+                    $buy_price = number_format($buy->bbo['ask_price'][0][0], 12, '.','');
+                }
+                if((float)$sell_price > (float)$buy_price) {
+                    $arb_positive[] = $p;
+                    Log::systemLog('warn', 'POSITIVE ALANYZE PAIRS'. json_encode($p).' sell='.$sell_price.' ('.$sell->exchange_name.')   buy='.$buy_price .'('.$buy->exchange_name.')', "Trader"); 
+                }*/
+            }
+            return $arb_pairs;
         }
         return false;
     }

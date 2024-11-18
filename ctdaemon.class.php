@@ -2,6 +2,7 @@
 class ctdaemon {
     public $proc_name = '';
     public $parent_proc = false;
+    public $proc_info = array();
 
     //Активные дочерние процессы. Вся информация хранится в массиве
     public $proc = array(); // name - имя сервиса; pid - pid; 2 - время старт
@@ -873,6 +874,8 @@ class ctdaemon {
         global $DB;
         //Trader must run after run all system's processes
         sleep(10);
+        $this->proc_info['status'] = 'running';
+        $this->proc_info['trade_count'] = 0;
         
         $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
         Log::systemLog('info',"Process type \"Trader\" STARTED pid=".getmypid(), "Trader");
@@ -897,103 +900,140 @@ class ctdaemon {
             //Update tree
             $this->updateProcTree();
             
-            switch($trader->trader_type) {
-                case 1:
-                    /*
-                     * Type 1. Market Arbitrage
-                     */
-                    //Update trader's data 
-                    $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
-                    if($update) {
-                        $trader->timer_update_data_ts = microtime(true)*1E6;
-                        //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
-                        $trader->updateTrader();
-                    }
-
-                    //Check status last arbitrage transaction (return integer)
-                    $arb_last_status = $trader->getLastArbTransStatus();
-                    //Log::systemLog('debug', 'ARBSTATUS pid='. $arb_status.'', "Trader");
-                    switch($arb_last_status) {
-                        case 4: //error
-                            $trader->trader_status = 20;
-                            sleep(1);
-                            break;
-                        case 6: //complete but loss
-                            if ($trader->checkOverflowCountLossArbTrans()) {
-                                $trader->trader_status = 30;
-                                sleep(1);
-                            }
-                            else {
-                                $continue = true;
-                            }
-                           break;
-                        default:
-                            $continue = true;
-                    }
-
-                    //Calculate position
-                    if($continue) {
-
-                    }
-
-                    //Prepare arbitrage transaction
-                    if($continue && $trader->arbitrage_id == 0) {
-                        $arb_id = $trader->prepareArbitrageTrans();
-                        if(!$arb_id) {
-                            $continue = false; 
-                        }
-                    }
-
-                    //Analyze
-                    if($continue) {
-                        $trade_allow = false;
-                        do {
-                            //This for keep alive process
-                            $this->timestamp = microtime(true)*1E6;
-                            $this->updateProcTree();
-
-                            //Read Order Book data for all TradeInstance. Read 20-65us at 6 trade proc
-                            //$start = microtime(true);
-                            $trader->readOrderBooks();                   
-                            //$stop = microtime(true) - $start;
-                            //Log::systemLog('debug', 'OBREAD '. $stop, "Trader");
-                            $trans_calc = $trader->calculateType_1();
-                            if($trans_calc !== false) {
-                                $trade_allow = true;
-                            }
-                            else {
-                                usleep(4500);
-                            }
-                        }
-                        while($trade_allow !== true);
-                        //Log::systemLog('debug', 'READY TRANS'. json_encode($trans_calc), "Trader");
-                    }
-
-                    //Calculation Ok. Send Buy and Sell request to RAM
-                    if($continue) {                    
-                        $sell = $trader->fetchObjectPoolTraderInstace($trans_calc['sell_instance_id']);
-                        $buy = $trader->fetchObjectPoolTraderInstace($trans_calc['buy_instance_id']);
-                        $volume = $trans_calc['volume'];
-                        $calc_profit = $trans_calc['profit'];
-                        
-                        //Push request to Worker RAM
-                        $s = $sell->requestMarketSell($arb_id, $volume);
-                        $s = $sell->requestMarketSell($arb_id."SSS", $volume);
-                        $b = $buy->requestMarketBuy($arb_id, $volume);
-                        $b = $buy->requestMarketBuy($arb_id."SSS", $volume);
-                        //Write arbitrage transaction detail into DB
-                        if($s && $b) {
-                            
-                        }
-                    }
-
-                    //reset arbitrage transaction
-                    //$trader->arbitrage_id = 0;
-
-                    sleep(2);
+            //Update trader's data 
+            $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
+            if($update) {
+                $trader->timer_update_data_ts = microtime(true)*1E6;
+                //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
+                $trader->updateTrader();
+            }
+            
+            //Check status last arbitrage transaction (return integer)
+            $arb_last_status = $trader->getLastArbTransStatus();
+            //Log::systemLog('debug', 'ARBSTATUS pid='. $arb_status.'', "Trader");
+            switch($arb_last_status) {
+                case 4: //error
+                    $trader->trader_status = 20;
+                    $this->proc_info['status'] = 'error';
                     break;
+                case 6: //complete but loss
+                    if ($trader->checkOverflowCountLossArbTrans()) {
+                        $trader->trader_status = 30;
+                        $this->proc_info['status'] = 'high_loss';
+                    }
+                    else {
+                        $this->proc_info['status'] = 'running';
+                        $continue = true;
+                    }
+                   break;
                 default:
-                    sleep(5);
+                    $continue = true;
+            }
+            
+            if($continue == false) {
+                sleep(2);
+            }
+            else {
+                switch($trader->trader_type) {
+                    case 1:
+                        /*
+                         * Type 1. Market Arbitrage
+                        */
+
+                        //Calculate position
+                        if($continue) {
+
+                        }
+
+                        //Prepare arbitrage transaction
+                        if($continue && $trader->arbitrage_id == 0) {
+                            $arb_id = $trader->prepareArbitrageTrans();
+                            if(!$arb_id) {
+                                $continue = false; 
+                            }
+                        }
+
+                        //Analyze
+                        if($continue) {
+                            $trade_allow = false;
+                            do {
+                                //This for keep alive process
+                                $this->timestamp = microtime(true)*1E6;
+                                $this->updateProcTree();
+                                //Update trader's data 
+                                $update = self::checkTimer($trader->timer_update_data, $trader->timer_update_data_ts);
+                                if($update) {
+                                    $trader->timer_update_data_ts = microtime(true)*1E6;
+                                    //Log::systemLog('debug', 'TRADER pid='. getmypid().' RUN TIMER UPDATE ', "Trader");
+                                    $trader->updateTrader();
+                                }
+
+                                //Read Order Book data for all TradeInstance. Read 20-65us at 6 trade proc
+                                $start = microtime(true);
+                                if($trader->bbo_only) {
+                                    $trader->readBBOs();
+                                }
+                                else {
+                                    $trader->readOrderBooks(); 
+                                    $trader->readBBOs();
+                                } 
+
+                                $stop = microtime(true) - $start;
+                                //Log::systemLog('debug', 'ORDER BOOK READ '. $stop, "Trader");
+                                $start_2 = microtime(true);
+                                
+                                $trade_arb_pairs = $trader->getProfitablePair_Type1();
+                                
+                                //$trans_calc = $trader->calculateType_1();
+                                $trans_calc = false;
+                                
+                                $stop_2 = microtime(true) - $start_2;
+                                //Log::systemLog('debug', 'CALCULATE '. $stop_2, "Trader");
+                                
+                                if($trans_calc !== false) {
+                                    $trade_allow = true;
+                                }
+                                else {
+                                    usleep(3000); //pause 3ms
+                                }
+                            }
+                            while($trade_allow !== true);
+                            Log::systemLog('debug', 'READY TO TRADE '. json_encode($trans_calc), "Trader");
+                        }
+
+                        //Calculation Ok. Send Buy and Sell request to RAM
+                        if($continue) {  
+                            $start_3 = microtime(true);
+                            $sell = $trader->fetchObjectPoolTraderInstace($trans_calc['sell_instance_id']);
+                            $buy = $trader->fetchObjectPoolTraderInstace($trans_calc['buy_instance_id']);
+                            $volume = $trans_calc['volume'];
+                            $calc_profit = $trans_calc['profit'];
+                            $stop_3 = microtime(true) - $start_3;
+                            //Log::systemLog('debug', 'FETCH INSTANCE '. $stop_3, "Trader");
+   
+                            //Push request to Worker RAM
+                            $start_4 = microtime(true);
+                            $s = $sell->requestMarketSell($arb_id, $volume);
+                            $b = $buy->requestMarketBuy($arb_id, $volume);
+                            $stop_4 = microtime(true) - $start_4;
+                            //Log::systemLog('debug', 'PUSH ARBITRAGE ACTION TO RAM '. $stop_4, "Trader");
+                            
+                            //Write arbitrage transaction detail into DB
+                            Log::systemLog('error', 'MARKET SELL arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address.' Profit='.$calc_profit.' '.$sell->exchange_name." readOB=".$stop.' calc='.$stop_2." getObj=".$stop_3." sendToTRAM=".$stop_4, "Trader");
+                            Log::systemLog('error', 'MARKET BUY arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address.' Profit='.$calc_profit.' '.$buy->exchange_name, "Trader");
+                            if($s && $b) {
+
+                            }
+                        }
+
+                        //reset arbitrage transaction
+                        //$trader->arbitrage_id = 0;
+
+                        sleep(2);
+                        break;
+                    default:
+                        sleep(5);
+                }
             }
         }
         

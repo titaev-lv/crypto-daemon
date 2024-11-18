@@ -155,10 +155,12 @@ class CoinEx implements ExchangeInterface {
 
     public function syncSpotAllTradePair() {
         global $DB;
-
+        $stack = array();
+        
         //1. Get Request
         $json_data = $this->request($this->base_url.'/v2/spot/market');
         if(!$json_data) {
+            Log::systemLog('error', 'Error request Market CoinEx. Return NULL NOT JSON');                        
             return false;
         }
         $data = json_decode($json_data,true);
@@ -173,6 +175,45 @@ class CoinEx implements ExchangeInterface {
                     $tmp['step_price'] = pow(10, (-1) * $exp);
                     $exp2 = (int) $d['base_ccy_precision'];
                     $tmp['step_volume'] =  pow(10, (-1) * $exp2);
+                    $tmp['base_currency'] = $d['base_ccy'];
+                    $tmp['quote_currency'] = $d['quote_ccy'];
+                    
+                    if(in_array($tmp['quote_currency_id'], array(825,19891,3408))) { //USDT,USDD, USDC
+                        $tmp['min_order_quote_amount'] = (float) 1;
+                    }
+                    else {
+                        if(count($stack) > 0 && array_key_exists($tmp['quote_currency_id'],$stack)) {
+                            $tmp['min_order_quote_amount'] = $stack[$tmp['quote_currency_id']];
+                        }
+                        else {
+                            $mqo = $this->request($this->base_url.'/v2/spot/ticker', 'market='.$d['quote_ccy'].'USDT');
+
+                            if(!$mqo) {
+                                $tmp['min_order_quote_amount'] = 'NULL';
+                                Log::systemLog('error', 'Error request Market Tikcer CoinEx. Return NULL');
+                                $this->lastError = 'Error request Market Tikcer CoinEx. Return NULL';
+                            }
+                            else {
+                                $mqo_data = json_decode($mqo,true);
+                                if($mqo_data['code'] == 0) {
+                                    if(count($mqo_data['data'])>0) {
+                                        $last_price = number_format($mqo_data['data'][0]['last'],12, '.','');
+                                        $min_order_quote_amount_precalc = (float) bcmul(bcdiv("1", $last_price,12), "1.05", 12);
+                                        $tmp['min_order_quote_amount'] = number_format(MathCalc::round($min_order_quote_amount_precalc, $tmp['step_price']), 12, '.','');
+                                        $stack[$tmp['quote_currency_id']] = $tmp['min_order_quote_amount'];
+                                    }
+                                    else {
+                                        Log::systemLog('error', 'Error request Market Tikcer CoinEx. Return data is empty');
+                                    }
+                                }
+                                else {
+                                    Log::systemLog('error', 'Error request Market Tikcer CoinEx. Return code='.$mqo_data['code']);
+                                    $this->lastError = 'Error request Market Tikcer CoinEx. Return code='.$mqo_data['code'];
+                                }
+                            }
+                        }
+                    }
+                    //
                     $ins_data[] = $tmp;
                     /*if(empty($tmp['base_currency_id'])) {
                         echo $d['trading_name'].'/'.$d['pricing_name'].' -- '.$tmp['base_currency_id'].'-'.$tmp['quote_currency_id'];
@@ -184,14 +225,16 @@ class CoinEx implements ExchangeInterface {
                 if($st) {
                     foreach ($ins_data as $d2) {
                         if($d2['base_currency_id'] && $d2['quote_currency_id']) {
-                            $base_currency_id = $d2['base_currency_id'];
-                            $quote_currency_id = $d2['quote_currency_id'];
+                            $base_currency_id = (int)$d2['base_currency_id'];
+                            $quote_currency_id = (int)$d2['quote_currency_id'];
                             $min_order_amount = $d2['min_order_amount'];
+                            $min_order_quote_amount = $d2['min_order_quote_amount'];
+                            
                             $step_price = $d2['step_price'];
                             $step_volume = $d2['step_volume'];
                             
-                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`,`MIN_ORDER_AMOUNT`,`STEP_PRICE`,`STEP_VOLUME`) VALUES(?,?,?,?,?,?) '
-                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW(),`MIN_ORDER_AMOUNT`=?,`STEP_PRICE`=?,`STEP_VOLUME`=?';
+                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`,`MIN_ORDER_AMOUNT`,`MIN_ORDER_QUOTE_AMOUNT`,`STEP_PRICE`,`STEP_VOLUME`) VALUES(?,?,?,?,?,?,?) '
+                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW(),`MIN_ORDER_AMOUNT`=?,`MIN_ORDER_QUOTE_AMOUNT`=?,`STEP_PRICE`=?,`STEP_VOLUME`=?';
                             $bind = array();
                             $bind[0]['type'] = 'i';
                             $bind[0]['value'] = $base_currency_id;
@@ -202,21 +245,25 @@ class CoinEx implements ExchangeInterface {
                             $bind[3]['type'] = 'd';
                             $bind[3]['value'] = $min_order_amount;
                             $bind[4]['type'] = 'd';
-                            $bind[4]['value'] = $step_price;
+                            $bind[4]['value'] = $min_order_quote_amount;
                             $bind[5]['type'] = 'd';
-                            $bind[5]['value'] = $step_volume;
-                            $bind[6]['type'] = 'i';
-                            $bind[6]['value'] = $base_currency_id;
+                            $bind[5]['value'] = $step_price;
+                            $bind[6]['type'] = 'd';
+                            $bind[6]['value'] = $step_volume;
                             $bind[7]['type'] = 'i';
-                            $bind[7]['value'] = $quote_currency_id;
+                            $bind[7]['value'] = $base_currency_id;
                             $bind[8]['type'] = 'i';
-                            $bind[8]['value'] = $this->exchange_id;
-                            $bind[9]['type'] = 'd';
-                            $bind[9]['value'] = $min_order_amount;
+                            $bind[8]['value'] = $quote_currency_id;
+                            $bind[9]['type'] = 'i';
+                            $bind[9]['value'] = $this->exchange_id;
                             $bind[10]['type'] = 'd';
-                            $bind[10]['value'] = $step_price;
+                            $bind[10]['value'] = $min_order_amount;
                             $bind[11]['type'] = 'd';
-                            $bind[11]['value'] = $step_volume;
+                            $bind[11]['value'] = $min_order_quote_amount;
+                            $bind[12]['type'] = 'd';
+                            $bind[12]['value'] = $step_price;
+                            $bind[13]['type'] = 'd';
+                            $bind[13]['value'] = $step_volume;
 
                             $ins = $DB->insert($sql,$bind);
                             if(!empty($DB->getLastError())) {

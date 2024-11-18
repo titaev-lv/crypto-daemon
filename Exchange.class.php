@@ -50,7 +50,7 @@ class Exchange {
         if(count($c) < 1) {
             return false;
         }
-        return $c[0]['ID'];
+        return (int)$c[0]['ID'];
     }
 
     public static function detectIdPair($pair, $exchange_id) {

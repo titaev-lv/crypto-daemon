@@ -144,6 +144,7 @@ class Huobi implements ExchangeInterface {
         //1. Get Request
         $json_data = $this->request($this->base_url.'/v1/settings/common/market-symbols');
         if(!$json_data) {
+            Log::systemLog('error', 'Error request Market Huobi. Return NULL NOT JSON');                
             return false;
         }
         $data = json_decode($json_data,true);
@@ -158,7 +159,7 @@ class Huobi implements ExchangeInterface {
                         $tmp['base_currency_id'] = Exchange::detectCoinIdByName(strtoupper($d['bc']), $this->exchange_id);
                         $tmp['quote_currency_id'] = Exchange::detectCoinIdByName($d['qc'], $this->exchange_id);
                         $tmp['min_order_amount'] = $d['minoa'];
-                        $tmp['min_order_quote_amount'] = $d['lominoa'];
+                        $tmp['min_order_quote_amount'] = $d['minov'];
                         $exp = (int) $d['pp'];
                         $tmp['step_price'] = pow(10, (-1) * $exp);
                         $exp2 = (int) $d['ap'];
@@ -181,11 +182,12 @@ class Huobi implements ExchangeInterface {
                             $base_currency_id = $d2['base_currency_id'];
                             $quote_currency_id = $d2['quote_currency_id'];
                             $min_order_amount = $d2['min_order_amount'];
+                            $min_order_quote_amount = $d2['min_order_quote_amount'];
                             $step_price = $d2['step_price'];
                             $step_volume = $d2['step_volume'];
                                                         
-                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`,`MIN_ORDER_AMOUNT`,`STEP_PRICE`,`STEP_VOLUME`) VALUES(?,?,?,?,?,?) '
-                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW(),`MIN_ORDER_AMOUNT`=?,`STEP_PRICE`=?,`STEP_VOLUME`=?';
+                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`,`MIN_ORDER_AMOUNT`, `MIN_ORDER_QUOTE_AMOUNT`,`STEP_PRICE`,`STEP_VOLUME`) VALUES(?,?,?,?,?,?,?) '
+                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW(),`MIN_ORDER_AMOUNT`=?,`MIN_ORDER_QUOTE_AMOUNT`=?,`STEP_PRICE`=?,`STEP_VOLUME`=?';
                             $bind = array();
                             $bind[0]['type'] = 'i';
                             $bind[0]['value'] = $base_currency_id;
@@ -196,21 +198,25 @@ class Huobi implements ExchangeInterface {
                             $bind[3]['type'] = 'd';
                             $bind[3]['value'] = $min_order_amount;
                             $bind[4]['type'] = 'd';
-                            $bind[4]['value'] = $step_price;
+                            $bind[4]['value'] = $min_order_quote_amount;
                             $bind[5]['type'] = 'd';
-                            $bind[5]['value'] = $step_volume;
-                            $bind[6]['type'] = 'i';
-                            $bind[6]['value'] = $base_currency_id;
+                            $bind[5]['value'] = $step_price;
+                            $bind[6]['type'] = 'd';
+                            $bind[6]['value'] = $step_volume;
                             $bind[7]['type'] = 'i';
-                            $bind[7]['value'] = $quote_currency_id;
+                            $bind[7]['value'] = $base_currency_id;
                             $bind[8]['type'] = 'i';
-                            $bind[8]['value'] = $this->exchange_id;
-                            $bind[9]['type'] = 'd';
-                            $bind[9]['value'] = $min_order_amount;
+                            $bind[8]['value'] = $quote_currency_id;
+                            $bind[9]['type'] = 'i';
+                            $bind[9]['value'] = $this->exchange_id;
                             $bind[10]['type'] = 'd';
-                            $bind[10]['value'] = $step_price;
+                            $bind[10]['value'] = $min_order_amount;
                             $bind[11]['type'] = 'd';
-                            $bind[11]['value'] = $step_volume;
+                            $bind[11]['value'] = $min_order_quote_amount;
+                            $bind[12]['type'] = 'd';
+                            $bind[12]['value'] = $step_price;
+                            $bind[13]['type'] = 'd';
+                            $bind[13]['value'] = $step_volume;
 
                             $ins = $DB->insert($sql,$bind);
                             if(!empty($DB->getLastError())) {

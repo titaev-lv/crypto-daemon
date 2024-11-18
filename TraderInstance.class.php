@@ -94,14 +94,14 @@ class TraderInstance {
         }
         if(!empty($tri)) {
             $tr = $tri[0];
-            $this->user_id = $tr['USER_ID'];
-            $this->account_id = $tr['ACCOUNT_ID'];
+            $this->user_id = (int)$tr['USER_ID'];
+            $this->account_id = (int)$tr['ACCOUNT_ID'];
             $this->account_name = $tr['ACCOUNT_NAME'];
-            $this->exchange_id = $tr['EXCHANGE_ID'];
+            $this->exchange_id = (int)$tr['EXCHANGE_ID'];
             $this->exchange_name = $tr['EXCHANGE_NAME'];
             $this->market = $tr['MARKET'];
             $this->trader_type = $tr['TYPE'];
-            $this->pair_id = $tr['PAIR_ID'];
+            $this->pair_id = (int)$tr['PAIR_ID'];
             $this->pair_name = Exchange::detectNamesPair($this->pair_id);
             $pair_arr = explode("/", $this->pair_name);
             $this->base_currency_name = $pair_arr[0];
@@ -120,7 +120,7 @@ class TraderInstance {
             $this->current_amount_base = $this->start_amount_base;
             $this->current_amount_quote = $this->start_amount_quote;
             $this->min_delta_profit_sell = (float)$tr['MIN_DELTA_PROFIT_SELL'];
-            $this->chain_send_out = $tr['CHAIN_SEND_OUT'];
+            $this->chain_send_out = (bool)$tr['CHAIN_SEND_OUT'];
 
             $this->instance_id = hash('xxh3',$this->account_id.'|'.$this->market.'|'.$this->pair_id);
             $this->orderbook_address = hash('xxh3',$this->exchange_id.'|'.$this->market.'|'.$this->pair_id);
@@ -255,10 +255,18 @@ class TraderInstance {
     public function readOrderBook() {
         $ob = OrderBook::readDepthRAM($this->orderbook_address);
         $bbo = OrderBook::readBBORAM($this->orderbook_address);
-        //Log::systemLog('debug', "BBO RAM DATA ".$this->orderbook_address.'  '. json_encode($bbo), "Trader");
-        //Log::systemLog('debug', "DEPTH RAM DATA ".$this->orderbook_address.'  '. json_encode($ob), "Trader");
         $this->orderbook = $ob;
         $this->bbo = $bbo;
+        $this->mergeOBvsBBO();
+        return true;
+    }
+    public function readBBO() {
+        $bbo = OrderBook::readBBORAM($this->orderbook_address);
+        $this->bbo = $bbo;
+        return true;
+    }
+    private function mergeOBvsBBO() {
+        
         return true;
     }
     public function requestMarketSell($arb_id, $volume) {
@@ -266,7 +274,7 @@ class TraderInstance {
         $write['arbitrage_id'] = $arb_id;
         $write['type'] = 'market_sell';
         $write['volume'] = $volume;
-        Log::systemLog('error', 'MARKET SELL arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address, "Trader");
+        //Log::systemLog('error', 'MARKET SELL arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address, "Trader");
         $this->writeInputWorkerRAM($write);
         return true;
     }
@@ -275,7 +283,7 @@ class TraderInstance {
         $write['arbitrage_id'] = $arb_id;
         $write['type'] = 'market_buy';
         $write['volume'] = $volume;
-        Log::systemLog('error', 'MARKET BUY arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address, "Trader");
+        //Log::systemLog('error', 'MARKET BUY arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address, "Trader");
         $this->writeInputWorkerRAM($write);
         return true;
     }
