@@ -393,11 +393,13 @@ class ctdaemon {
                     }
                     if($new_subscribe) {
                         //Create ftok crc hash for segment RAM
-                        foreach($ob->subscribe as $k=>$s) {
-                            if(!isset($s['ftok_crc']) || empty($s['ftok_crc'])) {
-                                // Exchange ID | Market (spot) | PAIR ID
-                                $ob->subscribe[$k]['ftok_crc'] = hash('xxh3',$ob->exchange_id.'|'.$ob->market.'|'.$s['id']);
-                                //Log::systemLog('debug', 'STRING CRC '.$ob->exchange_id.'|'.$ob->market.'|'.$s['id'].' '. $ob->subscribe[$k]['ftok_crc'], "Order Book");
+                        if(is_iterable($ob->subscribe)) {
+                            foreach($ob->subscribe as $k=>$s) {
+                                if(!isset($s['ftok_crc']) || empty($s['ftok_crc'])) {
+                                    // Exchange ID | Market (spot) | PAIR ID
+                                    $ob->subscribe[$k]['ftok_crc'] = hash('xxh3',$ob->exchange_id.'|'.$ob->market.'|'.$s['id']);
+                                    //Log::systemLog('debug', 'STRING CRC '.$ob->exchange_id.'|'.$ob->market.'|'.$s['id'].' '. $ob->subscribe[$k]['ftok_crc'], "Order Book");
+                                }
                             }
                         }
                         //Log::systemLog('debug', 'PROC SUBSCRIBE '. getmypid().' '. json_encode($ob->subscribe), "Order Book");
@@ -550,35 +552,37 @@ class ctdaemon {
                 if($request) {
                     $ob->timer_rest_requests_ts = microtime(true)*1E6;
                     //$exchange->
-                    foreach ($ob->subscribe as $s) {
-                        $symbol = $s['name'];
-                        $received = $exchange->restMarketDepth($symbol); 
-                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response NATIVE '. $received, "Order Book");
-                        $return = $exchange->restMarketDepthParse($received);
-                        if(isset($return['data'])) {
-                            $return['data'][0]['pair'] = $symbol;
-                        }
-                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response parse '. json_encode($return), "Order Book");
-                        if($return['method'] == 'depth') {
-                            //search in subscribe array
-                            $found_sunscribe = false;
-                            if(is_array($ob->subscribe)) {
-                                foreach ($ob->subscribe as $s) {
-                                    foreach ($return['data'] as $d) {
-                                        if($s['name'] == $d['pair']) {
-                                            $found_sunscribe = true;
+                    if(is_iterable($ob->subscribe)) {
+                        foreach ($ob->subscribe as $s) {
+                            $symbol = $s['name'];
+                            $received = $exchange->restMarketDepth($symbol); 
+                            //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response NATIVE '. $received, "Order Book");
+                            $return = $exchange->restMarketDepthParse($received);
+                            if(isset($return['data'])) {
+                                $return['data'][0]['pair'] = $symbol;
+                            }
+                            //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response parse '. json_encode($return), "Order Book");
+                            if($return['method'] == 'depth') {
+                                //search in subscribe array
+                                $found_sunscribe = false;
+                                if(is_array($ob->subscribe)) {
+                                    foreach ($ob->subscribe as $s) {
+                                        foreach ($return['data'] as $d) {
+                                            if($s['name'] == $d['pair']) {
+                                                $found_sunscribe = true;
+                                            }
                                         }
                                     }
                                 }
+                                //Write data into RAM
+                                if($found_sunscribe === true) {
+                                    $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
+                                    //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' REST API Receive parse '. json_encode($return_merge), "Order Book");                                                     
+                                    $ob->writeDepthRAM($return_merge);
+                                }
                             }
-                            //Write data into RAM
-                            if($found_sunscribe === true) {
-                                $return_merge = $exchange->mergeTradePairData($return,$ob->subscribe);
-                                //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$ob->exchange_name.' '. strtoupper($ob->market).' REST API Receive parse '. json_encode($return_merge), "Order Book");                                                     
-                                $ob->writeDepthRAM($return_merge);
-                            }
-                        }
-                    }                  
+                        } 
+                    }
                 }
                 usleep(1000);
             }
@@ -1019,8 +1023,8 @@ class ctdaemon {
                             //Log::systemLog('debug', 'PUSH ARBITRAGE ACTION TO RAM '. $stop_4, "Trader");
                             
                             //Write arbitrage transaction detail into DB
-                            Log::systemLog('error', 'MARKET SELL arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address.' Profit='.$calc_profit.' '.$sell->exchange_name." readOB=".$stop.' calc='.$stop_2." getObj=".$stop_3." sendToTRAM=".$stop_4, "Trader");
-                            Log::systemLog('error', 'MARKET BUY arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address.' Profit='.$calc_profit.' '.$buy->exchange_name, "Trader");
+                            //Log::systemLog('error', 'MARKET SELL arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address.' Profit='.$calc_profit.' '.$sell->exchange_name." readOB=".$stop.' calc='.$stop_2." getObj=".$stop_3." sendToTRAM=".$stop_4, "Trader");
+                            //Log::systemLog('error', 'MARKET BUY arb_id='.$arb_id.' vol='.$volume.' to_ram='.$this->worker_address.' Profit='.$calc_profit.' '.$buy->exchange_name, "Trader");
                             if($s && $b) {
 
                             }
