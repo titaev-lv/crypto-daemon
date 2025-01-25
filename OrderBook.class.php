@@ -392,6 +392,7 @@ class OrderBook {
         $data_mod = $data['data'][0];
         unset($data_mod['pair_id']);
         unset($data_mod['ftok_crc']);
+        $data_mod['timestamp'] = microtime(true)*1E6;
         $data_json = json_encode($data_mod);
         
         //Semaphore
@@ -437,6 +438,7 @@ class OrderBook {
             $bbo['sys_pair'] = $data['sys_pair'];
             $bbo['pair'] = $data['pair'];
             $bbo['price_timestamp'] = $data['price_timestamp'];
+            $bbo['timestamp'] = microtime(true)*1E6;
             $bbo['ask_price'] = $data['asks'][0][0];
             $bbo['ask_volume'] = $data['asks'][0][1];  
             $bbo['bid_price'] = $data['bids'][0][0];

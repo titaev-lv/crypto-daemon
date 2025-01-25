@@ -254,10 +254,10 @@ class Trader {
         //All available pairs to sell/buy in array
         $arb_avail_pairs = $this->getAvailablePairs_type_1_and_2();
         if($arb_avail_pairs !== false && !empty($arb_avail_pairs)) {
-            //Calculate profit for all alailable pairs
+            //Calculate profit for all available pairs
             $arb_calc_profit = $this->calc($arb_avail_pairs);
 
-            Log::systemLog('warn', 'PROFIT PAIRS '.json_encode($arb_calc_profit), "Trader");
+            //Log::systemLog('warn', 'PROFIT PAIRS '.json_encode($arb_calc_profit), "Trader");
         }
         return false;
     }
@@ -570,8 +570,9 @@ class Trader {
                     //}
               //  }
                 
-
-                Log::systemLog('warn', 'CALC ALANYZE PAIRS'. json_encode($p).' sell='.$sell_price.' ('.$sell->exchange_name.')   buy='.$buy_price .'('.$buy->exchange_name.') profit='.$delta.' volume='.$volume, "Trader"); 
+                if($delta > 0) {
+                    Log::systemLog('warn', 'CALC ALANYZE PAIRS'. json_encode($p).' sell='.$sell_price.' ('.$sell->exchange_name.')   buy='.$buy_price .'('.$buy->exchange_name.') profit='.$delta.' volume='.$volume, "Trader"); 
+                }
 
 
                 /*if($this->fin_protection) {
