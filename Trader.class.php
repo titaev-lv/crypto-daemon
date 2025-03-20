@@ -21,6 +21,7 @@ class Trader {
     
     public $timer_update_data = 20*1E6;
     public $timer_update_data_ts = 0;
+    private $timestamp_limit = 7;
     private $limit_count_negative_trans = 3;
     
     function __construct($trader_id) {
@@ -256,8 +257,7 @@ class Trader {
         if($arb_avail_pairs !== false && !empty($arb_avail_pairs)) {
             //Calculate profit for all available pairs
             $arb_calc_profit = $this->calc($arb_avail_pairs);
-
-            //Log::systemLog('warn', 'PROFIT PAIRS '.json_encode($arb_calc_profit), "Trader");
+            Log::systemLog('warn', 'PROFIT PAIRS '.json_encode($arb_calc_profit), "Trader");
         }
         return false;
     }
@@ -539,36 +539,55 @@ class Trader {
             foreach ($arb_pairs as $ins=>$p) {
                 $sell = $this->fetchObjectPoolTraderInstace($p['sell']);
                 $buy = $this->fetchObjectPoolTraderInstace($p['buy']);
-                
-                //if(isset($sell->orderbook['bids']) && isset($sell->orderbook['asks']) && isset($buy->orderbook['bids']) && isset($buy->orderbook['asks'])) {
-                    //Check timestamp
-                    //if(isset($sell->orderbook['timestamp']) && isset($buy->orderbook['timestamp']) && $sell->orderbook['timestamp'] && $buy->orderbook['timestamp']) {
-                        //if(microtime(true) - (float)$sell->orderbook['timestamp']*1E-6 < 6 && microtime(true) - (float)$buy->orderbook['timestamp']*1E-6 < 6) {
-                            //BBO is true. Use only best price
-                            $sell_price =  number_format($sell->bbo['bid_price'], 12, '.','');
-                            $buy_price = number_format($buy->bbo['ask_price'], 12, '.','');
-                            $fee_sell = bcmul($sell_price, (string)$sell->taker_fee, 12);
-                            $fee_buy = bcmul($buy_price, (string)$buy->taker_fee, 12);
-                            //Delta price with commission
-                            $delta = number_format(bcsub(bcsub($sell_price, $fee_sell,12), bcadd($buy_price,$fee_buy,12),12), 12, '.','');
-                            //Max volume
-                            $volume = ((float)$sell->bbo['bid_volume'] < (float)$buy->bbo['ask_volume']) ? $sell->bbo['bid_volume'] : $buy->bbo['ask_volume'];
-                            $volume = number_format($volume, 12, '.','');
-                            $arb_pairs[$ins]['bbo']['profit'] = $delta;
-                            $arb_pairs[$ins]['bbo']['volume'] = $volume;
-                            //normal mode
-                            if($this->bbo_only === false) {
-                                
-                            }
-                            
-                            //finance protection
-                            if($this->bbo_only === false) {
-                                
-                            }
-                            
-                        //}
-                    //}
-              //  }
+  
+                if(isset($sell->bbo['bid_price']) && !empty($sell->bbo['bid_price']) && isset($buy->bbo['bid_price']) && !empty($buy->bbo['bid_price'])) {
+                    //BBO is true. Use only best price
+                    $sell_price =  number_format($sell->bbo['bid_price'], 12, '.','');
+                    $buy_price = number_format($buy->bbo['ask_price'], 12, '.','');
+                    $fee_sell = bcmul($sell_price, (string)$sell->taker_fee, 12);
+                    $fee_buy = bcmul($buy_price, (string)$buy->taker_fee, 12);
+                    //Delta price with commission
+                    $delta = number_format(bcsub(bcsub($sell_price, $fee_sell,12), bcadd($buy_price,$fee_buy,12),12), 12, '.','');
+                    //Max volume
+                    $volume = ((float)$sell->bbo['bid_volume'] < (float)$buy->bbo['ask_volume']) ? $sell->bbo['bid_volume'] : $buy->bbo['ask_volume'];
+                    $volume_nf = number_format($volume, 12, '.','');
+                    $arb_pairs[$ins]['bbo']['profit'] = $delta;
+                    $arb_pairs[$ins]['bbo']['volume'] = $volume_nf;
+
+                    //timestamp enable
+                    if(isset($sell->bbo['timestamp']) && isset($buy->bbo['timestamp'])) {
+                        $bbo_ts_sell = microtime(true) - (float)$sell->bbo['timestamp']*1E-6;
+                        $bbo_ts_buy = microtime(true) - (float)$buy->bbo['timestamp']*1E-6;
+                        if($bbo_ts_sell < $this->timestamp_limit && $bbo_ts_buy < $this->timestamp_limit) {
+                            $arb_pairs[$ins]['bbo']['timestamp_enable'] = true;
+                        }
+                        else {
+                            $arb_pairs[$ins]['bbo']['timestamp_enable'] = false;
+                            Log::systemLog('debug', 'timestamp BBO is exceed limit', "Trader"); 
+                        }
+                        $arb_pairs[$ins]['bbo']['timestamp_enable'] = ($bbo_ts_sell < $this->timestamp_limit && $bbo_ts_buy < $this->timestamp_limit) ? true : false;
+                    }
+                    else {
+                        $arb_pairs[$ins]['bbo']['timestamp_enable'] = false;
+                        Log::systemLog('warn', 'timestamp BBO is empty', "Trader"); 
+                    }
+                    //volume enable
+                    
+                    //
+                }
+                else {
+                    Log::systemLog('warn', 'FAILED read bbo price from object to calc profit', "Trader"); 
+                }
+                //normal mode
+                if($this->bbo_only === false) {
+
+                }
+
+                //finance protection
+                if($this->bbo_only === false) {
+
+                }
+
                 
                 if($delta > 0) {
                     Log::systemLog('warn', 'CALC ALANYZE PAIRS'. json_encode($p).' sell='.$sell_price.' ('.$sell->exchange_name.')   buy='.$buy_price .'('.$buy->exchange_name.') profit='.$delta.' volume='.$volume, "Trader"); 

@@ -15,6 +15,8 @@ class ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5
         array (
             'Psr\\Log\\' => 8,
             'Psr\\Http\\Message\\' => 17,
+            'Phrity\\Util\\' => 12,
+            'Phrity\\Net\\' => 11,
         ),
     );
 
@@ -29,14 +31,17 @@ class ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5
         ),
         'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/http-message/src',
-            1 => __DIR__ . '/..' . '/psr/http-factory/src',
+            0 => __DIR__ . '/..' . '/psr/http-factory/src',
+            1 => __DIR__ . '/..' . '/psr/http-message/src',
         ),
-    );
-
-    public static $fallbackDirsPsr4 = array (
-        0 => __DIR__ . '/..' . '/phrity/util-errorhandler/src',
-        1 => __DIR__ . '/..' . '/phrity/net-uri/src',
+        'Phrity\\Util\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/phrity/util-errorhandler/src',
+        ),
+        'Phrity\\Net\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/phrity/net-uri/src',
+        ),
     );
 
     public static $classMap = array (
@@ -48,7 +53,6 @@ class ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5
         return \Closure::bind(function () use ($loader) {
             $loader->prefixLengthsPsr4 = ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5::$prefixLengthsPsr4;
             $loader->prefixDirsPsr4 = ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5::$prefixDirsPsr4;
-            $loader->fallbackDirsPsr4 = ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5::$fallbackDirsPsr4;
             $loader->classMap = ComposerStaticInit04d0fb7db962bb58d3bac9eeb8af10f5::$classMap;
 
         }, null, ClassLoader::class);

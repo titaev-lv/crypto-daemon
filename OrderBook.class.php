@@ -251,8 +251,10 @@ class OrderBook {
                     }
                 }
                 $id = ftok($path, 'A');
-                //Semaphore
-                $semId = sem_get($id);
+                $id2 = ftok($path, 'B');
+                
+                //Write timestamp order book
+                $semId = sem_get($id); //Semaphore
                 sem_acquire($semId);
                 //read segment
                 $shmId = shm_attach($id);
@@ -281,6 +283,33 @@ class OrderBook {
                 shm_put_var($shmId, $var, $data_json);
                 shm_detach($shmId);
                 sem_release($semId);
+                
+                //write timestamp bbo
+                $semId2 = sem_get($id2); //semaphore
+                sem_acquire($semId2);
+                //read segment
+                $shmId2 = shm_attach($id2);
+                $var = 1;
+                $data = '';
+                $data_arr = array();
+                if(shm_has_var($shmId2, $var)) {
+                    //get data
+                    $data = shm_get_var($shmId2, $var);
+                } 
+                shm_detach($shmId2);
+                //
+                if(!empty($data)) {
+                    $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+                    if(is_array($data_arr)) {
+                        $data_arr['timestamp'] = microtime(true)*1E6;
+                        $data_json = json_encode($data_arr);
+                        $shmId2 = shm_attach($id2, strlen($data_json)+4096);
+                        $var = 1;
+                        shm_put_var($shmId2, $var, $data_json);
+                        shm_detach($shmId2);
+                    }
+                }
+                sem_release($semId2);
             }
         }
         //$time = microtime(true) - $start;
@@ -300,8 +329,10 @@ class OrderBook {
                     }
                 }
                 $id = ftok($path, 'A');
-                //Semaphore
-                $semId = sem_get($id);
+                $id2 = ftok($path, 'B');
+                
+                //Write timestamp order book
+                $semId = sem_get($id);//Semaphore
                 sem_acquire($semId);
                 //read segment
                 $shmId = shm_attach($id);
@@ -324,12 +355,39 @@ class OrderBook {
                 
                 $data_arr['timestamp'] = microtime(true)*1E6;
                 $data_json = json_encode($data_arr);
-                
+           
                 $shmId = shm_attach($id, strlen($data_json)+4096);
                 $var = 1;
                 shm_put_var($shmId, $var, $data_json);
                 shm_detach($shmId);
                 sem_release($semId);
+                
+                //write timestamp bbo
+                $semId2 = sem_get($id2); //semaphore
+                sem_acquire($semId2);
+                //read segment
+                $shmId2 = shm_attach($id2);
+                $var = 1;
+                $data = '';
+                $data_arr = array();
+                if(shm_has_var($shmId2, $var)) {
+                    //get data
+                    $data = shm_get_var($shmId2, $var);
+                } 
+                shm_detach($shmId2);
+                //
+                if(!empty($data)) {
+                    $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+                    if(is_array($data_arr)) {
+                        $data_arr['timestamp'] = microtime(true)*1E6;
+                        $data_json = json_encode($data_arr);
+                        $shmId2 = shm_attach($id2, strlen($data_json)+4096);
+                        $var = 1;
+                        shm_put_var($shmId2, $var, $data_json);
+                        shm_detach($shmId2);
+                    }
+                }
+                sem_release($semId2);
             }
         }   
         return true;

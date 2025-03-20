@@ -973,32 +973,24 @@ class ctdaemon {
                                 }
 
                                 //Read Order Book data for all TradeInstance. Read 20-65us at 6 trade proc
-                                $start = microtime(true);
-                                if($trader->bbo_only) {
-                                    $trader->readBBOs();
-                                }
-                                else {
-                                    $trader->readOrderBooks(); 
-                                    $trader->readBBOs();
-                                } 
-
-                                $stop = microtime(true) - $start;
-                                //Log::systemLog('debug', 'ORDER BOOK READ '. $stop, "Trader");
-                                $start_2 = microtime(true);
+                                //$start = microtime(true);
+                                $trader->readOrderBooks(); 
+                                $trader->readBBOs();
+                                //$stop = microtime(true) - $start;
+                                //Log::systemLog('warn', 'ORDER BOOK ******** READ '. $stop, "Trader"); // ~ 200-500us
                                 
+                                //$start_2 = microtime(true);
                                 $trade_arb_pairs = $trader->getProfitablePair_Type1();
-                                
                                 //$trans_calc = $trader->calculateType_1();
                                 $trans_calc = false;
-                                
-                                $stop_2 = microtime(true) - $start_2;
-                                //Log::systemLog('debug', 'CALCULATE '. $stop_2, "Trader");
+                                //$stop_2 = microtime(true) - $start_2;
+                                //Log::systemLog('warn', 'CALCULATE '. $stop_2, "Trader");
                                 
                                 if($trans_calc !== false) {
                                     $trade_allow = true;
                                 }
                                 else {
-                                    usleep(3000); //pause 3ms
+                                    usleep(10000); //pause 3ms
                                 }
                             }
                             while($trade_allow !== true);
@@ -1302,7 +1294,7 @@ class ctdaemon {
                 Log::systemLog('warn', 'Process "Trade Worker" pid='. getmypid().' read RAM '.json_encode($queue_el), "Trade Worker");
             }
             
-            usleep(10);
+            usleep(100);
         }
     }
     private function runProcOrderTransMonitor() {
@@ -1438,7 +1430,7 @@ class ctdaemon {
            //Log::systemLog('debug', 'Recevive PROC TREE from RAM '. json_encode($pt_arr).' proc='. getmypid());
            return $pt_arr;
         } 
-       return false;
+        return false;
     }
     public function updateProcTree() {
         $u = self::checkTimer($this->timer_update_tree, $this->timer_update_tree_ts);
