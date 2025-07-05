@@ -170,7 +170,7 @@ class MySQL implements DbInterface {
         //$this->check_connection();
         return mysqli_insert_id($this->conn);
     }
-    public function sql_not_need_prepared ($sql) {
+    public function sql($sql) {
         $q = mysqli_query($this->conn, $sql);
         if($q == false) {
             $this->last_erorr = "MYSQL ERROR (".mysqli_errno($this->conn).") ".mysqli_error($this->conn);

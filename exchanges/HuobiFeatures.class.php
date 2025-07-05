@@ -1,8 +1,13 @@
 <?php
 
-class Huobi implements ExchangeInterface {
+class HuobiFeatures implements ExchangeInterface {
     private $exchange_id = 0;
+    private $market = 'spot';
     private $name = '';
+    private $base_url = '';
+    private $websocket_url = '';
+    private $websoket_count = 1;
+    private $websoket_conn_id = '';
     
     private $account_id = 0;
     private $api_key = '';
@@ -13,15 +18,18 @@ class Huobi implements ExchangeInterface {
 
     public $rest_request_freq = 0.5; //requests per second
     
-    public function __construct($id, $account_id=false, $market=false) {
+    public function __construct($id, $account_id=false, $market='spot') {
         global $DB;
         $this->exchange_id = $id;
-        $sql = "SELECT `NAME` FROM `EXCHANGE` WHERE `ID`=? AND `ACTIVE`=1";
+        $this->market = $market;
+        $sql = "SELECT `NAME`, `BASE_URL`, `WEBSOCKET_URL` FROM `EXCHANGE` WHERE `ID`=? AND `ACTIVE`=1";
         $bind = array();
         $bind[0]['type'] = 'i';
         $bind[0]['value'] = $id;
         $ret = $DB->select($sql,$bind);
         if(count($ret)>0) {
+             $this->base_url = $ret[0]['BASE_URL'];
+             $this->websocket_url = $ret[0]['WEBSOCKET_URL'];
              $this->name = $ret[0]['NAME'];
         }
         if($account_id) {
@@ -50,7 +58,7 @@ class Huobi implements ExchangeInterface {
         return $this->account_id;
     }
     public function getMarket() {
-        return false;
+        return $this->market;
     }
     private function sign($method,$url,$param=array()) {
         $request_str = $method."\n".preg_replace("/https:\/\//", '', $this->base_url)."\n".$url."\n";
@@ -130,7 +138,7 @@ class Huobi implements ExchangeInterface {
         return $time->format('Uu');
     }
     
-    /*public function syncSpotAllTradePair() {
+    public function syncSpotAllTradePair() {
         global $DB;
 
         //1. Get Request
@@ -164,7 +172,7 @@ class Huobi implements ExchangeInterface {
                             echo "<br>";                
                         }*/
                     
-         /*           }
+                    }
                 }
                 
                 $st = $DB->startTransaction();
@@ -238,8 +246,7 @@ class Huobi implements ExchangeInterface {
             Log::systemLog('error', 'Error syncSpotAllTradePair() Huobi. Return code='.$data['code']);
             return false;
         }
-    }*/
-    
+    }
     public function requestSpotTradeFee($pair_id) {
         $pair = Exchange::detectNamesPair($pair_id);
         //Prepare parameters for request
@@ -530,7 +537,7 @@ class Huobi implements ExchangeInterface {
         return $src;
     }
     public function isEnableWebsocket() {
-        return false;
+        return true;
     }
     public function isNeedPingWebsocket() {
         return false;

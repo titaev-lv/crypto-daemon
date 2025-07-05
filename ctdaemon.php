@@ -1,32 +1,58 @@
 #!/usr/bin/env php
 <?php
-//define('CURL_SSLVERSION_TLSv1_2', 6);
 ini_set('log_errors', 'On');
 ini_set('memory_limit', '4096M');
+ini_set('serialize_precision', -1);
 error_reporting(E_ALL);
+
+//System Processes
+require_once __DIR__.'/SystemProc.class.php';
+//Abstract classes
+require_once __DIR__.'/abstract/AbstractProc.class.php';
+require_once __DIR__.'/abstract/AbstractMonitor.class.php';
+require_once __DIR__.'/abstract/AbstractWorker.class.php';
+
+//Interfaces
+require_once __DIR__.'/interfaces/DbInterface.php';
+require_once __DIR__.'/interfaces/ExchangeInterface.php';
+
+//Systems
 require_once __DIR__.'/ctdaemon.class.php';  
 require_once __DIR__.'/signal.php';
 require_once __DIR__.'/fatal_error.php';
-require_once __DIR__.'/interfaces.php';
-require_once __DIR__.'/OrderBook.class.php';
+
+//Monitor classes
+require_once __DIR__.'/monitor/OrderBookMonitor.class.php';
+
+//Worker classes
+require_once __DIR__.'/worker/OrderBookWorker.class.php';
+
+//require_once __DIR__.'/OrderBook.class.php';
 require_once __DIR__.'/PriceLog.class.php';
 require_once __DIR__.'/Service.class.php';
 require_once __DIR__.'/Trader.class.php';
 require_once __DIR__.'/TraderInstance.class.php';
 require_once __DIR__.'/OrderAndTransaction.class.php';
 require_once __DIR__.'/TradeWorker.class.php';
-//Database
+//Databases classes
 require_once __DIR__.'/db/Db.class.php';
 require_once __DIR__.'/db/Mysql.class.php';
-//RAM
-require_once __DIR__.'/ServiceRAM.class.php';
-require_once __DIR__.'/ExternalRAM.class.php';
-//Exchanges
+//RAM classes
+require_once __DIR__.'/ram/ServiceRAM.class.php';
+require_once __DIR__.'/ram/ExternalRAM.class.php';
+require_once __DIR__.'/ram/OrderBookRAM.class.php';
+//Exchanges classes
 require_once __DIR__.'/Exchange.class.php';
 require_once __DIR__.'/exchanges/CoinEx.class.php';
+require_once __DIR__.'/exchanges/CoinExSpot.class.php';
+//require_once __DIR__.'/exchanges/CoinExFeatures.class.php';
 require_once __DIR__.'/exchanges/KuCoin.class.php';
+require_once __DIR__.'/exchanges/KuCoinSpot.class.php';
+//require_once __DIR__.'/exchanges/KuCoinFeatures.class.php';
 require_once __DIR__.'/exchanges/Poloniex.class.php';
 require_once __DIR__.'/exchanges/Huobi.class.php';
+require_once __DIR__.'/exchanges/HuobiSpot.class.php';
+//require_once __DIR__.'/exchanges/HuobiFeatures.class.php';
 //
 require_once __DIR__.'/Log.class.php';
 require_once __DIR__.'/MathCalc.class.php';
@@ -37,40 +63,40 @@ require_once __DIR__.'/vendor/autoload.php';
 register_shutdown_function('fatal_error');
 
 umask(0);
-$Daemon = new ctdaemon();
+$Daemon = new SystemProc();
+$Daemon->setProcName("ctd_main");
+$Daemon->root_dir = __DIR__;
 
 $pid = pcntl_fork();
 if ($pid == -1) {
     //Error fork 
-    Log::systemLog('error',"Error forked", "Main        ");
+    Log::systemLog('error',"Error forked", $Daemon->getProcName());
     exit('FATAL ERROR. Error forked'.PHP_EOL);
 } else if ($pid) {
     //Parent process, to kill
     exit();
 } else {
-    Log::systemLog('debug',"Process forked success", "Main        ");  
+    Log::systemLog('debug',"Process forked success", $Daemon->getProcName());  
     //Lost terminal
     $sid = posix_setsid();
     if($sid < 0) {
-       Log::systemLog('error',"Can not set current process a session leader", "Main        ");
+       Log::systemLog('error',"Can not set current process a session leader", $Daemon->getProcName());
        exit("FATAL ERROR. Can not set current process a session leader".PHP_EOL);
     }
     else {
-        Log::systemLog('debug',"Set current process a session leader", "Main        ");
+        Log::systemLog('debug',"Set current process a session leader", $Daemon->getProcName());
     }
-    $Daemon->proc_name = "ctd_main";
     if(function_exists('cli_set_process_title')) {
         cli_set_process_title("ctd_main");
-        $Daemon->proc_name = "ctd_main";
-        Log::systemLog("debug","Set daemon main process name ctd_main", "Main        ");
+        Log::systemLog("debug","Set daemon main process name ctd_main", $Daemon->getProcName());
     }
     if(@file_put_contents(__DIR__.'/run/ctdaemon.pid', getmypid())) {
-        Log::systemLog('debug',"Create pid file ".__DIR__."/run/ctdaemon.pid", "Main        ");
+        Log::systemLog('debug',"Create pid file ".__DIR__."/run/ctdaemon.pid", $Daemon->getProcName());
     }
     else {
-        Log::systemLog('error',"Error create pid file ".__DIR__."/run/ctdaemon.pid. Access deny", "Main        ");
+        Log::systemLog('error',"Error create pid file ".__DIR__."/run/ctdaemon.pid. Access deny", $Daemon->getProcName());
     }
-    Log::systemLog('debug',"Main process is pid=".getmypid(), "Main        "); 
+    Log::systemLog('debug',"Main process is pid=".getmypid(), $Daemon->getProcName()); 
     //Register system interrupt
     pcntl_async_signals(true);
     pcntl_signal(SIGTERM, "sigHandler");
@@ -78,68 +104,30 @@ if ($pid == -1) {
     pcntl_signal(SIGUSR1, "sigHandler");
     pcntl_signal(SIGUSR2, "sigHandler");
 
-    Log::systemLog(0,"ctdaemon STARTED", "Main        ");
+    Log::systemLog(0,"ctdaemon STARTED", $Daemon->getProcName());
     printf("ctdaemon started".PHP_EOL);
-    $Daemon->start = microtime(true)*1E6;
-    $Daemon->timestamp = microtime(true)*1E6;
+       
+    //Start process Monitor for manage exchanges order book
+    $Daemon->newProcess('OrderBook','monitor');
+ 
+    $Main = new ctdaemon();
+    $Main->setProcName($Daemon->getProcName());
     
-    //Create DB connection
-    //$DB = DB::init($Daemon->getDBEngine(),$Daemon->getDBCredentials());
-    
-    //Start process for manage exchanges order book
-    $ret = $Daemon->newProcess("ctd_orderbook_monitor");
-    
+    $Main->run();
+ 
     //Run process for monitoring and log pair price
-    $mon = $Daemon->newProcess("ctd_price_monitor");
+  //  $mon = $Daemon->newProcess("ctd_price_monitor");
     
     //Run Trader Worker monitors
-    $trw = $Daemon->newProcess("ctd_trade_worker_monitor");
+    //$trw = $Daemon->newProcess("ctd_trade_worker_monitor");
     
     //Run Order and Transaction monitor
-    $ot = $Daemon->newProcess("ctd_order_trans_monitor");
+   // $ot = $Daemon->newProcess("ctd_order_trans_monitor");
     
     //Run trader processes monitor
-    $tr = $Daemon->newProcess("ctd_trade_monitor");
+  //  $tr = $Daemon->newProcess("ctd_trade_monitor");
     
     //run service process (sync trade pair, sync exchange's fee and other)
-    $serv = $Daemon->newProcess("ctd_service");
-   
-    while(true) {
-        $Daemon->timestamp = microtime(true)*1E6;
-        
-        //For every process need update ProcTree for main perocee
-        $Daemon->updateProcTree();
-        
-        //Write Proc Tree into external RAM (rewrite)
-        $pid = getmypid();
-        $daemon_status['pid'] = $pid;
-        $daemon_status['name'] = $Daemon->proc_name;
-        $daemon_status['timestamp'] = $Daemon->timestamp;
-        $daemon_status['child'] = $Daemon->proc_tree;
-        ExternalRAM::write('daemon_status', $daemon_status);
-        
-        //Control Child Process
-        foreach ($Daemon->proc as $i=>$ch_proc) {
-            $delta = $Daemon->timestamp - $ch_proc['timestamp'];
-            if($delta > 30000000) { //30sec
-                Log::systemLog('warn', 'Process pid='.$ch_proc['pid']. ' '.$ch_proc['name'] . ' have expire timestamp = '.$delta. '. Restart process');
-                $kill = posix_kill($ch_proc['pid'], SIGTERM);  
-                if($kill) {
-                    unset($Daemon->proc[$i]);
-                    if(!empty($Daemon->proc_tree)) {   
-                        foreach($Daemon->proc_tree as $kt=>$proct) {
-                            if($ch_proc['pid'] == $proct['pid']) {
-                                unset($Daemon->proc_tree[$kt]);
-                            }
-                        }
-                    }
-                    $Daemon->newProcess($ch_proc['name']);
-                }
-            }
-        }
-        
-        //Log::systemLog('debug', 'PROC TREE '. json_encode($Daemon->proc_tree).' proc='. getmypid());
-        
-        usleep(200000);
-    }
+  //  $serv = $Daemon->newProcess("ctd_service");
+
 }

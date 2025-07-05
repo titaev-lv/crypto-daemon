@@ -1,39 +1,11 @@
 <?php
-
-class OrderBook {
-    public $exchange_id = 0;
-    public $exchange_name = '';
-    public $market = '';
-
-    public $subscribe = '';
-    public $subscribe_crc = '';
+ 
+class OrderBookRAM {
     
-    //Timers
-    public $timer_update_ob_ping_ts = 0;
-    public $timer_update_ob_timeout_ts = 0;
-    public $timer_rest_requests_ts = 0;
-    public $timer_update_ob_read_ram_subscribes_ts = 0;
-    
-    //Counts
-    public $time_count_timeout = 0;
-    
-    private $need_reconnect_flag = false;
-    
-    function __construct() {
-        $this->timer_update_ob_ping_ts = microtime(true)*1E6;
-    }
-        
-    public function eraseDepthRAM () {
-        if(!empty($this->subscribe)) {
-            foreach ($this->subscribe as $key=>$p) {
-                $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
-                if(!is_file($path)) {
-                    $file = fopen($path, 'w');
-                    if($file){
-                        fclose($file);
-                    }
-                }
-                $id = ftok($path, 'A');
+    public static function eraseDepthRAM ($subscribe) {
+        if(!empty($subscribe)) {
+            foreach ($subscribe as $key=>$p) {
+                $id = self::getTok($p['ftok_crc']);
                 //Semaphore
                 $semId = sem_get($id);
                 sem_acquire($semId);
@@ -49,21 +21,14 @@ class OrderBook {
         return true;
     }
     
-    public function writeDepthRAM($data_upd) {
+    public static function writeDepthRAM($data_upd, $update_subscribe = false) {
         //$start = microtime(true);
         //Log::systemLog(4, 'ORDER BOOK DATA TO WRITE RAM '.json_encode($data_upd));
         $nu = array();
         foreach ($data_upd['data'] as $d) {
             //$start1 = microtime(true);
-            $path = __DIR__."/ftok/".$d['ftok_crc'].'.ftok';
-            if(!is_file($path)) {
-                $file = fopen($path, 'w');
-                if($file){
-                    fclose($file);
-                }
-            }
             $nu[] = $d['ftok_crc'];
-            $id = ftok($path, 'A');
+            $id = self::getTok($d['ftok_crc']);
             //Semaphore
             $semId = sem_get($id);
             sem_acquire($semId);
@@ -92,18 +57,18 @@ class OrderBook {
                 $element['pair'] = $d['pair'];
                 $element['price_timestamp'] = $d['price_timestamp'];
                 $element['timestamp'] = $d['timestamp'];
-                $element['last_price'] = (float) $d['last_price'];
+                $element['last_price'] = $d['last_price'];
                 foreach ($d['asks'] as $b) {
                    $tmp = array();
-                   $tmp[0] = (float) $b[0];
-                   $tmp[1] = (float) $b[1];
+                   $tmp[0] = $b[0];
+                   $tmp[1] = $b[1];
                    $element['asks'][] = $tmp;
                    unset($tmp);
                 }
                 foreach ($d['bids'] as $b) {
                    $tmp = array();
-                   $tmp[0] = (float) $b[0];
-                   $tmp[1] = (float) $b[1];
+                   $tmp[0] = $b[0];
+                   $tmp[1] = $b[1];
                    $element['bids'][] = $tmp;
                    unset($tmp);
                 }
@@ -116,21 +81,23 @@ class OrderBook {
                     foreach ($d['bids'] as $b) {
                         $up = false; //insert values = false
                         foreach ($src_mem['bids'] as $k=>$v){
-                            if($v[0] === (float) $b[0]){
-                                if((float) $b[1] == 0) {
+                            $cmp = bccomp($v[0], $b[0], 12);
+                            if($cmp == 0){
+                                $cmp2 = bccomp($b[1], 0, 12);
+                                if($cmp2 == 0) {
                                     unset($src_mem['bids'][$k]);
                                     $resort_bids = true;
                                     $up = true; //not insert
                                 }
                                 else {
-                                    $src_mem['bids'][$k][1] = (float) $b[1];
+                                    $src_mem['bids'][$k][1] = $b[1];
                                     $up = true; //not insert
                                 }
                             }
                         }
                         if($up === false) {
-                            $tmp[0] = (float) $b[0];
-                            $tmp[1] = (float) $b[1];
+                            $tmp[0] = $b[0];
+                            $tmp[1] = $b[1];
                             $src_mem['bids'][] = $tmp;
                             $resort_bids = true;
                         }
@@ -143,21 +110,23 @@ class OrderBook {
                     foreach ($d['asks'] as $b) {
                         $up = false; //insert 
                         foreach ($src_mem['asks'] as $k=>$v) {
-                            if($v[0] === (float) $b[0]){
-                                if ((float) $b[1] == 0){
+                            $cmp = bccomp($v[0], $b[0], 12);
+                            if($cmp == 0){
+                                $cmp2 = bccomp($b[1], 0, 12);
+                                if ($cmp2 == 0){
                                     unset($src_mem['asks'][$k]);
                                     $resort_asks = true;
                                     $up = true; //not insert
                                 }
                                 else {
-                                    $src_mem['asks'][$k][1] = (float) $b[1];
+                                    $src_mem['asks'][$k][1] = $b[1];
                                     $up = true; //not insert
                                 }
                             }
                         }
                         if($up === false) {
-                            $tmp[0] = (float) $b[0];
-                            $tmp[1] = (float) $b[1];
+                            $tmp[0] = $b[0];
+                            $tmp[1] = $b[1];
                             $src_mem['asks'][] = $tmp;
                             $resort_asks = true;
                         }
@@ -172,32 +141,25 @@ class OrderBook {
                 }
                 $src_mem['price_timestamp'] = $d['price_timestamp'];
                 $src_mem['timestamp'] = $d['timestamp'];
-                $data_arr = $src_mem;
-                //Log::systemLog(4, 'ORDER BOOK ARR FOR MERGE '.json_encode($src));                
+                $data_arr = $src_mem;                
             }
         }
+        
         $data_json = json_encode($data_arr);
         $shmId = shm_attach($id, strlen($data_json)+4096);
         $var = 1;
         shm_put_var($shmId, $var, $data_json);
         shm_detach($shmId);
         sem_release($semId);
-        
+        //Log::systemLog(4, 'ORDER BOOK AFTER MERGE '.json_encode($data_arr));
         //$term1 = microtime(true) - $start1;
         //Log::systemLog(4, 'NEW Write RAM STEP1 '.$term1. ' '.$d['ftok_crc']);
         //Update timestamp for all exchange's trade pair
-        if(!empty($this->subscribe)) {
-            foreach ($this->subscribe as $key=>$p) {
+        if($update_subscribe && !empty($update_subscribe) && is_iterable($update_subscribe)) {
+            foreach ($update_subscribe as $key=>$p) {
                 if(!in_array($p['ftok_crc'], $nu)) {
                     //$start2 = microtime(true);
-                    $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
-                    if(!is_file($path)) {
-                        $file = fopen($path, 'w');
-                        if($file){
-                            fclose($file);
-                        }
-                    }
-                    $id = ftok($path, 'A');
+                    $id = self::getTok($p['ftok_crc']);
                     //Semaphore
                     $semId = sem_get($id);
                     sem_acquire($semId);
@@ -238,20 +200,13 @@ class OrderBook {
         //Log::systemLog(4, 'NEW Write RAM '.$term);
         return true;
     }
-    
-    public function writeDepthRAMupdatePong() {  
+      
+    public static function writeDepthRAMupdatePong($update_subscribe) {  
         //$start = microtime(true);
-        if(!empty($this->subscribe)) {
-            foreach ($this->subscribe as $key=>$p) {
-                $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
-                if(!is_file($path)) {
-                    $file = fopen($path, 'w');
-                    if($file){
-                        fclose($file);
-                    }
-                }
-                $id = ftok($path, 'A');
-                $id2 = ftok($path, 'B');
+        if(!empty($update_subscribe) && is_iterable($update_subscribe)) {
+            foreach ($update_subscribe as $key=>$p) {
+                $id = self::getTok($p['ftok_crc']);
+                $id2 = self::getTokBBO($p['ftok_crc']);
                 
                 //Write timestamp order book
                 $semId = sem_get($id); //Semaphore
@@ -317,19 +272,12 @@ class OrderBook {
         return true;
     }
     
-    public function writeDepthRAMupdatePing() {
+    public static function writeDepthRAMupdatePing($update_subscribe) {
         //$start = microtime(true);
-        if(!empty($this->subscribe)) {
-            foreach ($this->subscribe as $key=>$p) {
-                $path = __DIR__."/ftok/".$p['ftok_crc'].'.ftok';
-                if(!is_file($path)) {
-                    $file = fopen($path, 'w');
-                    if($file){
-                        fclose($file);
-                    }
-                }
-                $id = ftok($path, 'A');
-                $id2 = ftok($path, 'B');
+        if(!empty($update_subscribe) && is_iterable($update_subscribe)) {
+            foreach ($update_subscribe as $key=>$p) {
+                $id = self::getTok($p['ftok_crc']);
+                $id2 = self::getTokBBO($p['ftok_crc']);
                 
                 //Write timestamp order book
                 $semId = sem_get($id);//Semaphore
@@ -393,59 +341,8 @@ class OrderBook {
         return true;
     }
     
-    public static function readDepthRAM($hash) {
-        //$start = microtime(true);
-        $path = __DIR__."/ftok/".$hash.'.ftok';
-        if(!is_file($path)) {
-            $file = fopen($path, 'w');
-            if($file){
-                fclose($file);
-            }
-        }
-        $id = ftok($path, 'A');
-        //$start1 = microtime(true);
-        //set semaphore
-        $semId = sem_get($id);
-        sem_acquire($semId);
-        //read segment
-        $shmId = shm_attach($id);
-        $var = 1;
-        $data = '';
-        $ret_data = array();
-        if(shm_has_var($shmId, $var)) {
-            //get data
-            $data = shm_get_var($shmId, $var);
-        } 
-        else {
-            shm_detach($shmId);
-            sem_release($semId);
-            return false;
-        }
-        shm_detach($shmId);
-        sem_release($semId);
-        //$time1 = microtime(true) - $start1;
-        //Log::systemLog('debug', 'READ TIME Order Book ONLY RAM '.$time1.'s');
-        //
-        if(!empty($data)) {
-            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
-        }
-        else {
-            return false;
-        }
-          
-        //$time = microtime(true) - $start;
-        //Log::systemLog('debug', 'READ TIME Order Book RAM '.$time.'s');
-        return $data_arr; 
-    }
     public static function writeBBORAM($data) {
-        $path = __DIR__."/ftok/".$data['data'][0]['ftok_crc'].'.ftok';
-        if(!is_file($path)) {
-            $file = fopen($path, 'w');
-            if($file){
-                fclose($file);
-            }
-        }
-        $id = ftok($path, 'B');
+        $id = self::getTokBBO($data['data'][0]['ftok_crc']);
         $data_mod = array();
         $data_mod = $data['data'][0];
         unset($data_mod['pair_id']);
@@ -465,14 +362,7 @@ class OrderBook {
     }
     
     public static function readBBORAM($hash) {
-        $path = __DIR__."/ftok/".$hash.'.ftok';
-        if(!is_file($path)) {
-            $file = fopen($path, 'w');
-            if($file){
-                fclose($file);
-            }
-        }
-        $id = ftok($path, 'B');
+        $id = self::getTokBBO($hash);
         //set semaphore
         $semId = sem_get($id);
         sem_acquire($semId);
@@ -486,7 +376,7 @@ class OrderBook {
         else {
             shm_detach($shmId);
             sem_release($semId);
-            Log::systemLog('debug', "BBO RAM DATA is empty, read from DEPTH hash=".$hash.' ', "Trader");
+            Log::systemLog('debug', "BBO RAM DATA is empty, read from DEPTH hash=".$hash.' ');
             $data = self::readDepthRAM($hash);
             if(empty($data)) {
                 return false;
@@ -516,9 +406,35 @@ class OrderBook {
             return $data_arr;
         }
         else {
-            Log::systemLog('warn', "BBO RAM DATA is empty hash=".$hash.' ', "Trader");
+            Log::systemLog('warn', "BBO RAM DATA is empty hash=".$hash.' ');
             return false;
         }
+    }
+    
+    private static function getTok($crc) {
+        global $Daemon;
+        $path = $Daemon->root_dir."/ftok/".$crc.".ftok";
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'A');
+        //Log::systemLog(4, 'RAM '.$id);
+        return $id;
+    }
+    private static function getTokBBO($crc) {
+        global $Daemon;
+        $path = $Daemon->root_dir."/ftok/".$crc.".ftok";
+        if(!is_file($path)) {
+            $file = fopen($path, 'w');
+            if($file){
+                fclose($file);
+            }
+        }
+        $id = ftok($path, 'B');
+        return $id;
     }
 }
 

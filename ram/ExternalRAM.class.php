@@ -2,7 +2,7 @@
 
 class ExternalRAM {
     public static function write($section, $write_data) {
-        $id = ftok(__DIR__."/ftok/ExternalRAM.php", 'A');
+        $id = self::getTok();
         $semId = sem_get($id);
         //set semaphore
         //Log::systemLog(4, 'START write into RAM '.json_encode($datas));
@@ -31,6 +31,12 @@ class ExternalRAM {
         shm_put_var($shmId, $var, $data_json);
         shm_detach($shmId);
         sem_release($semId);
+    }
+   
+    private static function getTok() {
+        global $Daemon;
+        $id = ftok($Daemon->root_dir."/ftok/ExternalRAM.php", 'A');
+        return $id;
     }
 }
 ?>

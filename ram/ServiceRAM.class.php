@@ -5,8 +5,8 @@ class ServiceRAM {
     public static function read($action) {
         //$start = microtime(true);
         $pid = getmypid();
-        $id = ftok(__DIR__."/ftok/ServiceRAM.php", 'A');
-        //Log::systemLog(4, 'START read from RAM action-'.json_encode($action));
+        $id = self::getTok();
+        //Log::systemLog(4, 'START read from RAM action-'.json_encode($id));
         $semId = sem_get($id);
         //set semaphore
         sem_acquire($semId);
@@ -98,7 +98,8 @@ class ServiceRAM {
     
     public static function write($pid, $action, $datas) {
         //$start = microtime(true);
-        $id = ftok(__DIR__."/ftok/ServiceRAM.php", 'A');
+        $id = self::getTok();
+        //Log::systemLog(4, 'START write from RAM action-'.json_encode($id));
         $semId = sem_get($id);
         //set semaphore
         //Log::systemLog(4, 'START write into RAM '.json_encode($datas));
@@ -143,5 +144,11 @@ class ServiceRAM {
         //$time = microtime(true) - $start;
         //Log::systemLog('debug', 'WRIRE TIME SERVICE RAM '.$time.'s');
         return true;
+    }
+    
+    private static function getTok() {
+        global $Daemon;
+        $id = ftok($Daemon->root_dir."/ftok/ServiceRAM.php", 'A');
+        return $id;
     }
 }

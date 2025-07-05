@@ -1,9 +1,9 @@
 <?php
 //Factory class for exchange
 class Exchange {   
-    public static function init($id, $account_id=false) {
+    public static function init($id, $account_id=false, $market = false) {
         global $DB;
-        
+        $exch_postfix = '';
         if($id == 0) {
             return false;
         }
@@ -13,11 +13,22 @@ class Exchange {
             $bind[0]['type'] = 'i';
             $bind[0]['value'] = $id;
             $ret = $DB->select($sql,$bind);
-            $class_name = $ret[0]['CLASS_TO_FACTORY'];
+            switch ($market) {
+                case 'spot':
+                    $exch_postfix = 'Spot';
+                    break;
+                case 'features':
+                    $exch_postfix = 'Features';
+                    break;
+                default:
+                    $exch_postfix = ''; 
+            }
+            $class_name = $ret[0]['CLASS_TO_FACTORY'].$exch_postfix;
         }
         else {
             $class_name = $id;
         }
+        //Log::systemLog('debug', 'Class '.json_encode($class_name), ""); 
         return new $class_name($id, $account_id);
     }
     public static function detectCoinIdByName($name,$exchange_id) {

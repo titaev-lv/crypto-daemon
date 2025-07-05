@@ -1,13 +1,14 @@
 <?php
 function sigHandler($signal) {
-    global $Daemon, $DB;
+    global $Daemon;
     switch ($signal) {
         case SIGTERM:
             //Stop programm
-            if($Daemon->proc_name == 'ctd_main') {
+            if($Daemon->getProcName() == 'ctd_main') {
                 Log::systemLog("debug","Intercepted SIGTERM. Init stop ctdaemon");
             }
             if(!empty($Daemon->proc)) {
+                //Log::systemLog('debug',"Daemon proc for kill ". json_encode($Daemon->proc));
                 foreach ($Daemon->proc as $proc=>$pval) {
                     //Посылаем каждому из дочерних процессов системный вызов на завершение работы
                     posix_kill($pval['pid'], SIGTERM);
@@ -45,7 +46,7 @@ function sigHandler($signal) {
                     }
                 }
             }
-            if($Daemon->proc_name == 'ctd_main') {
+            if($Daemon->getProcName() == 'ctd_main') {
                 //destroy memory
                 $id = ftok(__DIR__."/ftok/ServiceRAM.php", 'A');
                 $shmId = shm_attach($id);

@@ -1,8 +1,13 @@
 <?php
 
-class CoinEx implements ExchangeInterface {
+class CoinExFeatures implements ExchangeInterface {
     private $exchange_id = 0;
+    private $market = 'spot';
     private $name = '';
+    private $base_url = '';
+    private $websocket_url = '';
+    private $websoket_count = 1;
+    private $websoket_conn_id = '';
     
     private $account_id = 0;
     private $api_key = '';
@@ -11,16 +16,21 @@ class CoinEx implements ExchangeInterface {
     private $timestamp = 0;
     
     public $lastError = '';
+
+    public $rest_request_freq = 0.5; //requests per second
     
-    public function __construct($id, $account_id=false, $market=false) {
+    public function __construct($id, $account_id=false, $market='spot') {
         global $DB;
         $this->exchange_id = $id;
-        $sql = "SELECT `NAME` FROM `EXCHANGE` WHERE `ID`=? AND `ACTIVE`=1";
+        $this->market = $market;
+        $sql = "SELECT `NAME`, `BASE_URL`, `WEBSOCKET_URL` FROM `EXCHANGE` WHERE `ID`=? AND `ACTIVE`=1";
         $bind = array();
         $bind[0]['type'] = 'i';
         $bind[0]['value'] = $id;
         $ret = $DB->select($sql,$bind);
         if(count($ret)>0) {
+             $this->base_url = $ret[0]['BASE_URL'];
+             $this->websocket_url = $ret[0]['WEBSOCKET_URL'];
              $this->name = $ret[0]['NAME'];
         }
         if($account_id) {
@@ -53,7 +63,7 @@ class CoinEx implements ExchangeInterface {
     }
 
     public function getMarket() {
-        return false;
+        return $this->market;
     }
 
     private function sign($method,$url,$param=array()) {
@@ -143,7 +153,7 @@ class CoinEx implements ExchangeInterface {
         return $time->format('Uu');
     }
 
-    /*public function syncSpotAllTradePair() {
+    public function syncSpotAllTradePair() {
         global $DB;
         $stack = array();
         
@@ -209,9 +219,9 @@ class CoinEx implements ExchangeInterface {
                         echo $d['trading_name'].'/'.$d['pricing_name'].' -- '.$tmp['base_currency_id'].'-'.$tmp['quote_currency_id'];
                         echo "<br>";                
                     }*/
-       //         }
+                }
                 
-         /*       $st = $DB->startTransaction();
+                $st = $DB->startTransaction();
                 if($st) {
                     foreach ($ins_data as $d2) {
                         if($d2['base_currency_id'] && $d2['quote_currency_id']) {
@@ -284,7 +294,7 @@ class CoinEx implements ExchangeInterface {
             $this->lastError = 'Error syncSpotAllTradePair() CoinEx. Return code='.$data['code'];
             return false;
         }
-    }*/
+    }
     
     public function requestSpotTradeFee($pair_id) {
         $pair = Exchange::detectNamesPair($pair_id);
@@ -523,7 +533,7 @@ class CoinEx implements ExchangeInterface {
         return true;
     }
     public function isEnableWebsocket() {
-        return false;
+        return true;
     }
     public function webSocketConnect($type=false) {
         $options = array_merge([

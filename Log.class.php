@@ -6,11 +6,11 @@ class Log {
     private static $trade_log_file = '';
 
 
-    public static function defineSystemLogFIile($path) {
+    public static function defineSystemLogFile($path) {
         self::$system_log_file = $path;
         return true;
     }
-    public static function defineTradeLogFIile($path) {
+    public static function defineTradeLogFile($path) {
         self::$trade_log_file = $path;
         return true;
     }
