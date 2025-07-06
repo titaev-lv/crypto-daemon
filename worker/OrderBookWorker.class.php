@@ -60,6 +60,7 @@ class OrderBookWorker extends AbstractWorker {
                     $this->ws = $ws;
                     $this->subscribe = '';
                     $this->subscribe_crc = '';
+                    sleep(1);
                 }
             }
         }
@@ -121,7 +122,7 @@ class OrderBookWorker extends AbstractWorker {
             if($tik || $this->ws_time_count_timeout > 20) {
                 if($this->ws_time_count_timeout > 20) {
                     $need_reconnect = true;
-                    OrderBookRAM::eraseDepthRAM();
+                    OrderBookRAM::eraseDepthRAM($this->subscribe);
                     unset($this->ws);
                     Log::systemLog('error', 'Order Book Worker proc='. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' LOST CONNECTION websocket',  $this->getProcName());
                     $this->ws_time_count_timeout = 0;
@@ -182,7 +183,7 @@ class OrderBookWorker extends AbstractWorker {
                                 break;
                             case 'ping':
                                 OrderBookRAM::writeDepthRAMupdatePing($this->subscribe);
-                                Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PING '. json_encode($return), $this->getProcName());
+                                //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PING '. json_encode($return), $this->getProcName());
                                 $msg = array();
                                 $msg['pong'] = $return['timestamp'];  
                                 $msg_json = json_encode($msg);
@@ -191,7 +192,7 @@ class OrderBookWorker extends AbstractWorker {
                                 break;
                             case 'error':
                                 $need_reconnect = true;
-                                OrderBookRAM::eraseDepthRAM();
+                                OrderBookRAM::eraseDepthRAM($this->subscribe);
                                 unset($this->ws);
                                 $this->ws_time_count_timeout = 0;
                                 break;

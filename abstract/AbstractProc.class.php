@@ -5,14 +5,12 @@ abstract class AbstractProc {
     
     public ?int $timestamp = NULL;
     
-//Timers
+    //Timers
     protected int $timer_update_tree = 200000; // 0.2sec
     protected int $timer_update_tree_ts = 0;
-    /*protected int $timer_zombie = 5000000; //5 sec
-    protected int $timer_zombie_ts = 0;*/
-    
-   // protected int $timeout_child = 15000000;
-    
+    protected int $timer_zombie = 5000000; //5 sec
+    protected int $timer_zombie_ts = 0;
+        
     abstract protected function processing();
     
        
@@ -22,7 +20,7 @@ abstract class AbstractProc {
             $this->timestamp = microtime(true)*1E6;
             $Daemon->timestamp = $this->timestamp;
             $this->updateProcTree();
-            //$this->huntToZombie();
+            $this->huntToZombie();
             $this->processing();
         }
     }
@@ -167,69 +165,70 @@ abstract class AbstractProc {
     }
     
     public function huntToZombie() {
-        global $DB;
-        $h = self::checkTimer($this->timer_zombie, $this->timer_zombie_ts);
-        if($h === true) {
+        global $Daemon, $DB;
+        if($this->probeTimer("timer_zombie") === true) { 
             $this->timer_zombie_ts = microtime(true)*1E6;
             //Log::systemLog('debug', 'Zombie search pid='. getmypid(),$this->proc_name);
             //Kill zombie and reborn Child Process
-            foreach ($this->proc as $i=>$ch_proc) {
-                $delta = $this->timestamp - $ch_proc['timestamp'];
-                //Log::systemLog('debug', 'Zombie search d='.$delta." timeout=".$this->timeout_child, $this->proc_name);
-                if($delta > $this->timeout_child) { 
-                    Log::systemLog('warn', 'Process pid='.$ch_proc['pid']. ' '.$ch_proc['name'] . ' have expire timestamp = '.$delta. '. Init restart process', $this->proc_name);
-                    $kill = posix_kill($ch_proc['pid'], SIGTERM);  
-                    if($kill) {
-                        if(!empty($this->proc_tree)) {   
-                            foreach($this->proc_tree as $kt=>$proct) {
-                                if($ch_proc['pid'] == $proct['pid']) {
-                                    if(!empty($proct['child']) && is_array($proct['child'])) {
-                                        foreach ($proct['child'] as $chp) {
-                                            $k = posix_kill($chp['pid'], SIGTERM); 
-                                            if($k) {
-                                                Log::systemLog('warn', 'Zombie child process pid='.$chp['pid']. ' '.$chp['name'] . ' killed',$this->proc_name);
-                                            }
-                                            else {
-                                                Log::systemLog('error', 'ERROR kill Zombie\'s child process ='.$ch_proc['pid'].', perhaps it is died', $this->proc_name);
+            if(is_iterable($Daemon->proc) && !empty($Daemon->proc)) {
+                foreach ($Daemon->proc as $i=>$ch_proc) {
+                    $delta = microtime(true)*1E6 - $ch_proc['timestamp'];
+                    //Log::systemLog('debug', 'Zombie search d='.$delta." timeout=".$this->timeout_child, $this->proc_name);
+                    if($delta > $Daemon->timeout_child) { 
+                        Log::systemLog('warn', 'Process pid='.$ch_proc['pid']. ' '.$ch_proc['name'] . ' have expire timestamp = '.$delta. '. Init restart process', $this->getProcName());
+                        $kill = posix_kill($ch_proc['pid'], SIGTERM);  
+                        if($kill) {
+                            if(!empty($Daemon->proc_tree)) {   
+                                foreach($Daemon->proc_tree as $kt=>$proct) {
+                                    if($ch_proc['pid'] == $proct['pid']) {
+                                        if(!empty($proct['child']) && is_array($proct['child'])) {
+                                            foreach ($proct['child'] as $chp) {
+                                                $k = posix_kill($chp['pid'], SIGTERM); 
+                                                if($k) {
+                                                    Log::systemLog('warn', 'Zombie child process pid='.$chp['pid']. ' '.$chp['name'] . ' killed',$this->getProcName());
+                                                }
+                                                else {
+                                                    Log::systemLog('error', 'ERROR kill Zombie\'s child process ='.$ch_proc['pid'].', perhaps it is died', $this->getProcName());
+                                                }
                                             }
                                         }
+                                        unset($Daemon->proc_tree[$kt]);
                                     }
-                                    unset($this->proc_tree[$kt]);
                                 }
                             }
-                        }
-                        Log::systemLog('warn', 'Process pid='.$ch_proc['pid'].' is killed.', $this->proc_name);
-                        $DB->close();
-                        $new_pid = $this->newProcess($ch_proc['type'],$ch_proc['type2']);
-                        $DB = DB::init($this->getDBEngine(),$this->getDBCredentials()); 
-                        //additin info for reborn process
-                        /*For Order Book workers*/
-                        if($this->proc[$i]['type'] === 'OrderBook' && $this->proc[$i]['type2'] === 'worker') {
-                            if(isset($this->proc[$i]['market'])) {
-                                $this->proc[$new_pid]['market'] = $this->proc[$i]['market'];
-                            }
-                            if(isset($this->proc[$i]['exchange_id'])) {
-                                $this->proc[$new_pid]['exchange_id'] = $this->proc[$i]['exchange_id'];
-                            }
-                            if(isset($this->proc[$new_pid]['market']) && isset($this->proc[$new_pid]['exchange_id'])) {
-                               //Send new process info about exchange and market type
-                                ServiceRAM::write($new_pid,'create_exchange_orderbook', array('exchange_id'=>$this->proc[$new_pid]['exchange_id'],'market'=>$this->proc[$new_pid]['market'])); 
-                            }
+                            Log::systemLog('warn', 'Process pid='.$ch_proc['pid'].' is killed.', $this->getProcName());
+                            $DB->close();
+                            $new_pid = $Daemon->newProcess($ch_proc['type'],$ch_proc['type2']);
+                            $DB = DB::init($Daemon->getDBEngine(),$Daemon->getDBCredentials()); 
+                            //additin info for reborn process
+                            /*For Order Book workers*/
+                            if($Daemon->proc[$i]['type'] === 'OrderBook' && $Daemon->proc[$i]['type2'] === 'worker') {
+                                if(isset($Daemon->proc[$i]['market'])) {
+                                    $Daemon->proc[$new_pid]['market'] = $Daemon->proc[$i]['market'];
+                                }
+                                if(isset($Daemon->proc[$i]['exchange_id'])) {
+                                    $Daemon->proc[$new_pid]['exchange_id'] = $Daemon->proc[$i]['exchange_id'];
+                                }
+                                if(isset($Daemon->proc[$new_pid]['market']) && isset($Daemon->proc[$new_pid]['exchange_id'])) {
+                                   //Send new process info about exchange and market type
+                                    ServiceRAM::write($new_pid,'create_exchange_orderbook', array('exchange_id'=>$Daemon->proc[$new_pid]['exchange_id'],'market'=>$Daemon->proc[$new_pid]['market'])); 
+                                }
 
-                            if(isset($this->proc[$i]['subscribe'])) {
-                                $this->proc[$new_pid]['subscribe'] = $this->proc[$i]['subscribe'];
-                                ServiceRAM::write($new_pid,'active_exchange_pair_orderbook',$this->proc[$new_pid]['subscribe']);
-                                Log::systemLog('debug', 'SEND to ServiceRAM command "active_exchange_pair_orderbook" to order book process = '. $proc['pid'].' '. json_encode($this->proc[$new_pid]['subscribe']), $this->proc_name);
+                                if(isset($Daemon->proc[$i]['subscribe'])) {
+                                    $Daemon->proc[$new_pid]['subscribe'] = $Daemon->proc[$i]['subscribe'];
+                                    ServiceRAM::write($new_pid,'active_exchange_pair_orderbook',$Daemon->proc[$new_pid]['subscribe']);
+                                    Log::systemLog('debug', 'SEND to ServiceRAM command "active_exchange_pair_orderbook" to order book process = '. $proc['pid'].' '. json_encode($Daemon->proc[$new_pid]['subscribe']), $this->proc_name);
+                                }
+                                if(isset($Daemon->proc[$i]['subscribe_crc'])) {
+                                    $Daemon->proc[$new_pid]['subscribe_crc'] = $Daemon->proc[$i]['subscribe_crc'];
+                                }
                             }
-                            if(isset($this->proc[$i]['subscribe_crc'])) {
-                                $this->proc[$new_pid]['subscribe_crc'] = $this->proc[$i]['subscribe_crc'];
-                            }
+                            /*****/
+                            unset($Daemon->proc[$i]);
                         }
-                        /*****/
-                        unset($this->proc[$i]);
-                    }
-                    else {
-                        Log::systemLog('error', 'ERROR kill process ='.$ch_proc['pid'].', perhaps it is died', $this->proc_name);
+                        else {
+                            Log::systemLog('error', 'ERROR kill process ='.$ch_proc['pid'].', perhaps it is died', $this->proc_name);
+                        }
                     }
                 }
             }

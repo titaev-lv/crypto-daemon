@@ -126,7 +126,7 @@ class OrderBookMonitor extends AbstractMonitor {
                             unset($Daemon->proc[$k]);
                             if(!empty($Daemon->proc_tree)) {   
                                 foreach($Daemon->proc_tree as $kt=>$proct) {
-                                    if($Daemon['pid'] == $proct['pid']) {
+                                    if($proc['pid'] == $proct['pid']) {
                                          unset($Daemon->proc_tree[$kt]);
                                     }
                                 }

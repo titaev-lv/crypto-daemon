@@ -16,6 +16,8 @@ class SystemProc {
     private string $db_engine;
     private array $db_credentials;
     
+    public int $timeout_child = 15000000;
+    
     //Timers
     /*public int $timer_update_tree = 200000; // 0.2sec
     public int $timer_update_tree_ts = 0;
