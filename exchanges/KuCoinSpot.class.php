@@ -1,6 +1,6 @@
 <?php
 
-class KuCoinSpot extends KuCoin {
+class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
     private $exchange_id = 0;
     private $market = 'spot';
     private $name = '';
@@ -1059,9 +1059,18 @@ class KuCoinSpot extends KuCoin {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
-    public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
+    public function restMarketDepth ($symbol, $limit=5, $merge="0") {
         $str = 'symbol='.$symbol;
-        $json_response = $this->request($this->base_url.'/market/orderbook/level2_20', $str, 'GET');
+        switch ($limit) {
+            case 5:
+                $l = 'level2_20';
+                break;
+            case 20:
+                $l = 'level2_20';
+                break;
+            default:
+        }
+        $json_response = $this->request($this->base_url.'/market/orderbook/'.$l, $str, 'GET');
         if(empty($json_response)) {
             Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol);
             $this->lastError =  'Error request CoinEx Market Depth for '.$symbol;
@@ -1083,10 +1092,13 @@ class KuCoinSpot extends KuCoin {
                 $tmp = array();
                 $tmp['diff'] = false;
                 $tmp['pair'] = false;
-                $tmp['asks'] = array_slice($r['data']['asks'], 0, 5);
-                $tmp['bids'] = array_slice($r['data']['bids'], 0, 5);
+                //$tmp['asks'] = array_slice($r['data']['asks'], 0, 5);
+                $tmp['asks'] = $r['data']['asks'];
+                //$tmp['bids'] = array_slice($r['data']['bids'], 0, 5);
+                $tmp['bids'] = $r['data']['bids'];
                 $tmp['last_price'] = null;
                 $tmp['timestamp'] = $r['data']['time']*1E3;
+                $tmp['price_timestamp'] = $tmp['timestamp'];
                 $ret['id'] = null;
                 $ret['data'][] = $tmp;   
                 return $ret;

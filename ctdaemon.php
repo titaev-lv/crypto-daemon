@@ -49,7 +49,7 @@ require_once __DIR__.'/exchanges/CoinExSpot.class.php';
 require_once __DIR__.'/exchanges/KuCoin.class.php';
 require_once __DIR__.'/exchanges/KuCoinSpot.class.php';
 //require_once __DIR__.'/exchanges/KuCoinFeatures.class.php';
-require_once __DIR__.'/exchanges/Poloniex.class.php';
+//require_once __DIR__.'/exchanges/Poloniex.class.php';
 require_once __DIR__.'/exchanges/Huobi.class.php';
 require_once __DIR__.'/exchanges/HuobiSpot.class.php';
 //require_once __DIR__.'/exchanges/HuobiFeatures.class.php';

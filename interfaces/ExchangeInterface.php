@@ -1,6 +1,6 @@
 <?php
 
-interface ExchangeInterface {
+interface ExchangeTradeInterface {
     //Get Exchange ID
     public function getId();
     //Get Exchange Name

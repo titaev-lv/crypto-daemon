@@ -1,6 +1,6 @@
 <?php
 
-class Huobi implements ExchangeInterface {
+class Huobi {
     private $exchange_id = 0;
     private $name = '';
     
@@ -735,47 +735,6 @@ class Huobi implements ExchangeInterface {
             return true;
         }
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
-        return false;
-    }
-    public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
-        $str = 'market='.$symbol.'&merge='.$merge.'&limit='.$limit;
-        $json_response = $this->request($this->base_url.'/market/depth', $str, 'GET');
-        if(empty($json_response)) {
-            Log::systemLog('error', 'Error request Huobi Market Depth for '.$symbol);
-            $this->lastError =  'Error request Huobi Market Depth for '.$symbol;
-            return false;
-        }
-        $r = json_decode($json_response,JSON_OBJECT_AS_ARRAY);
-        if($r['code'] != 0) {
-            Log::systemLog('error', 'Error request Huobi Market Depth for '.$symbol.' Return code '.$code);
-            $this->lastError = 'Error request Huobi Market Depth for '.$symbol.' Return code '.$code;
-            return false;
-        }
-        return $json_response;
-    }
-    public function restMarketDepthParse($receive) {
-        if(!empty($receive)) {
-            $r = json_decode($receive, JSON_OBJECT_AS_ARRAY);
-            $ret = array();
-            if(is_array($r)) {
-                if($r['code'] == 0 && $r['message'] == 'OK') {
-                    $ret['method'] = 'depth';
-                    $tmp = array();
-                    $tmp['diff'] = false;
-                    $tmp['pair'] = false;
-                    $tmp['asks'] = $r['data']['asks'];
-                    $tmp['bids'] = $r['data']['bids'];
-                    $tmp['last_price'] = $r['data']['last'];
-                    $tmp['price_timestamp'] = $r['data']['time']*1E3;
-                    $tmp['timestamp'] = $this->getTonceU();
-                    $ret['data'][] = $tmp;                    
-                    $ret['id'] = 0;
-                    return $ret;
-                }
-            }
-        }
-        Log::systemLog('error', 'Error parse Huobi Market Depth '.$receive);
-        $this->lastError = 'Error parse Huobi Market Depth for '.$receive;
         return false;
     }
 }

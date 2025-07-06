@@ -140,11 +140,6 @@ class OrderBookMonitor extends AbstractMonitor {
             }
         }
         //Log::systemLog('debug', 'Daemon Order Book proc processing '.json_encode($Daemon), $this->getProcName()); 
-        if(random_int(1, 10000) > 9998) {
-             Log::systemLog('error', 'EMULATE PROC ZOMBIE', $this->getProcName());
-            sleep(1000); 
-           
-        }
         usleep(20000);
     }
 

@@ -12,7 +12,7 @@ class OrderBookWorker extends AbstractWorker {
     protected $timer_update_ob_ping_ts = 0;
     protected $timer_update_ob_timeout = 5000;
     protected $timer_update_ob_timeout_ts = 0;
-    protected $timer_update_ob_rest = 1000000;
+    protected $timer_update_ob_rest = 500000;
     protected $timer_update_ob_rest_ts = 0;
     
     protected int $exchange_id;
@@ -231,13 +231,13 @@ class OrderBookWorker extends AbstractWorker {
                 if(is_iterable($this->subscribe)) {
                     foreach ($this->subscribe as $s) {
                         $symbol = $s['name'];
-                        $received = $this->exchangeObj->restMarketDepth($symbol); 
+                        $received = $this->exchangeObj->restMarketDepth($symbol,20); 
                         //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response NATIVE '. $received, "Order Book");
                         $return = $this->exchangeObj->restMarketDepthParse($received);
                         if(isset($return['data'])) {
                             $return['data'][0]['pair'] = $symbol;
                         }
-                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response parse '. json_encode($return), "Order Book");
+                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' REST API response parse '. json_encode($return), $this->getProcName());
                         if($return['method'] == 'depth') {
                             //search in subscribe array
                             $found_sunscribe = false;
@@ -260,7 +260,7 @@ class OrderBookWorker extends AbstractWorker {
                     } 
                 }
             }
-            usleep(1000);
+            //usleep(1000);
         }
     }
     

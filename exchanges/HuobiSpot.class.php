@@ -1,6 +1,6 @@
 <?php
 
-class HuobiSpot extends Huobi {
+class HuobiSpot extends Huobi implements ExchangeTradeInterface {
     private $exchange_id = 0;
     private $market = 'spot';
     private $name = '';
@@ -758,8 +758,8 @@ class HuobiSpot extends Huobi {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
-    public function restMarketDepth ($symbol, $merge="0", $limit= 5) {
-        $str = 'market='.$symbol.'&merge='.$merge.'&limit='.$limit;
+    public function restMarketDepth ($symbol, $limit= 5, $type="step0") {
+        $str = 'symbol='.$symbol.'&depth='.$limit.'&type='.$type;
         $json_response = $this->request($this->base_url.'/market/depth', $str, 'GET');
         if(empty($json_response)) {
             Log::systemLog('error', 'Error request Huobi Market Depth for '.$symbol);
@@ -767,9 +767,9 @@ class HuobiSpot extends Huobi {
             return false;
         }
         $r = json_decode($json_response,JSON_OBJECT_AS_ARRAY);
-        if($r['code'] != 0) {
-            Log::systemLog('error', 'Error request Huobi Market Depth for '.$symbol.' Return code '.$code);
-            $this->lastError = 'Error request Huobi Market Depth for '.$symbol.' Return code '.$code;
+        if($r['status'] == 'error') {
+            Log::systemLog('error', 'Error request Huobi Market Depth for '.$symbol.' Return code '.$r['err-code'].' '.$r['err-msg']);
+            $this->lastError = 'Error request Huobi Market Depth for '.$symbol.' Return code '.$r['err-code'].' '.$r['err-msg'];
             return false;
         }
         return $json_response;
@@ -779,15 +779,29 @@ class HuobiSpot extends Huobi {
             $r = json_decode($receive, JSON_OBJECT_AS_ARRAY);
             $ret = array();
             if(is_array($r)) {
-                if($r['code'] == 0 && $r['message'] == 'OK') {
+                if($r['status'] == 'ok') {
                     $ret['method'] = 'depth';
                     $tmp = array();
                     $tmp['diff'] = false;
                     $tmp['pair'] = false;
-                    $tmp['asks'] = $r['data']['asks'];
-                    $tmp['bids'] = $r['data']['bids'];
-                    $tmp['last_price'] = $r['data']['last'];
-                    $tmp['price_timestamp'] = $r['data']['time']*1E3;
+                    $tmp['asks'] = $r['tick']['asks'];
+                    if(is_iterable($tmp['asks'])) {
+                        $c = count($tmp['asks']);
+                        for($i=0;$i<$c;$i++) {
+                            $tmp['asks'][$i][0] = (string)$tmp['asks'][$i][0];
+                            $tmp['asks'][$i][1] = (string)$tmp['asks'][$i][1];
+                        }
+                    }
+                    $tmp['bids'] = $r['tick']['bids'];
+                    if(is_iterable($tmp['bids'])) {
+                        $c = count($tmp['bids']);
+                        for($i=0;$i<$c;$i++) {
+                            $tmp['bids'][$i][0] = (string)$tmp['bids'][$i][0];
+                            $tmp['bids'][$i][1] = (string)$tmp['bids'][$i][1];
+                        }
+                    }
+                    $tmp['last_price'] = false;
+                    $tmp['price_timestamp'] = $r['tick']['ts']*1E3;
                     $tmp['timestamp'] = $this->getTonceU();
                     $ret['data'][] = $tmp;                    
                     $ret['id'] = 0;

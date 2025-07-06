@@ -1,6 +1,6 @@
 <?php
 
-class CoinExSpot extends CoinEx {
+class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
     private $exchange_id = 0;
     private $market = 'spot';
     private $name = '';
@@ -769,7 +769,7 @@ class CoinExSpot extends CoinEx {
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
-    public function restMarketDepth ($symbol, $interval="0", $limit= 20) {
+    public function restMarketDepth ($symbol, $limit= 5, $interval="0") {
         $str = 'market='.$symbol.'&interval='.$interval.'&limit='.$limit;
         $json_response = $this->request($this->base_url.'/v2/spot/depth', $str, 'GET');
         if(empty($json_response)) {

@@ -1,6 +1,6 @@
 <?php
 
-class CoinEx implements ExchangeInterface {
+class CoinEx {
     private $exchange_id = 0;
     private $name = '';
     
@@ -757,47 +757,6 @@ class CoinEx implements ExchangeInterface {
             return true;
         }
         Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
-        return false;
-    }
-    public function restMarketDepth ($symbol, $interval="0", $limit= 20) {
-        $str = 'market='.$symbol.'&interval='.$interval.'&limit='.$limit;
-        $json_response = $this->request($this->base_url.'/v2/spot/depth', $str, 'GET');
-        if(empty($json_response)) {
-            Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol);
-            $this->lastError =  'Error request CoinEx Market Depth for '.$symbol;
-            return false;
-        }
-        $r = json_decode($json_response,JSON_OBJECT_AS_ARRAY);
-        if($r['code'] != 0) {
-            Log::systemLog('error', 'Error request CoinEx Market Depth for '.$symbol.' Return code '.$r['code']);
-            $this->lastError = 'Error request CoinEx Market Depth for '.$symbol.' Return code '.$r['code'];
-            return false;
-        }
-        return $json_response;
-    }
-    public function restMarketDepthParse($receive) {
-        if(!empty($receive)) {
-            $r = json_decode($receive, JSON_OBJECT_AS_ARRAY);
-            $ret = array();
-            if(is_array($r)) {
-                if($r['code'] == 0 && $r['message'] == 'OK') {
-                    $ret['method'] = 'depth';
-                    $tmp = array();
-                    $tmp['diff'] = false;
-                    $tmp['pair'] = false;
-                    $tmp['asks'] = $r['data']['depth']['asks'];
-                    $tmp['bids'] = $r['data']['depth']['bids'];
-                    $tmp['last_price'] = $r['data']['depth']['last'];
-                    $tmp['price_timestamp'] = $r['data']['depth']['updated_at']*1E3;
-                    $tmp['timestamp'] = $this->getTonceU();
-                    $ret['data'][] = $tmp;                    
-                    $ret['id'] = 0;
-                    return $ret;
-                }
-            }
-        }
-        Log::systemLog('error', 'Error parse CoinEx Market Depth '.$receive);
-        $this->lastError = 'Error parse CoinEx Market Depth for '.$receive;
         return false;
     }
 }
