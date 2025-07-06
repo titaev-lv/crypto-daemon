@@ -11,7 +11,7 @@ class OrderBookMonitor extends AbstractMonitor {
     protected int $timeout_child = 8000000;
     
     public function processing() {
-        global $Daemon, $DB;   
+        global $Daemon, $DB;           
         //Available merkets
         $markets = array("spot","features");
         //Log::systemLog('debug', 'Order Book Monitor processing'.json_encode($this), $this->getProcName());      
@@ -140,6 +140,11 @@ class OrderBookMonitor extends AbstractMonitor {
             }
         }
         //Log::systemLog('debug', 'Daemon Order Book proc processing '.json_encode($Daemon), $this->getProcName()); 
+        if(random_int(1, 10000) > 9998) {
+             Log::systemLog('error', 'EMULATE PROC ZOMBIE', $this->getProcName());
+            sleep(1000); 
+           
+        }
         usleep(20000);
     }
 

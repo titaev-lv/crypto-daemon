@@ -197,30 +197,43 @@ abstract class AbstractProc {
                                 }
                             }
                             Log::systemLog('warn', 'Process pid='.$ch_proc['pid'].' is killed.', $this->getProcName());
-                            $DB->close();
-                            $new_pid = $Daemon->newProcess($ch_proc['type'],$ch_proc['type2']);
-                            $DB = DB::init($Daemon->getDBEngine(),$Daemon->getDBCredentials()); 
-                            //additin info for reborn process
-                            /*For Order Book workers*/
-                            if($Daemon->proc[$i]['type'] === 'OrderBook' && $Daemon->proc[$i]['type2'] === 'worker') {
-                                if(isset($Daemon->proc[$i]['market'])) {
-                                    $Daemon->proc[$new_pid]['market'] = $Daemon->proc[$i]['market'];
-                                }
-                                if(isset($Daemon->proc[$i]['exchange_id'])) {
-                                    $Daemon->proc[$new_pid]['exchange_id'] = $Daemon->proc[$i]['exchange_id'];
-                                }
-                                if(isset($Daemon->proc[$new_pid]['market']) && isset($Daemon->proc[$new_pid]['exchange_id'])) {
-                                   //Send new process info about exchange and market type
-                                    ServiceRAM::write($new_pid,'create_exchange_orderbook', array('exchange_id'=>$Daemon->proc[$new_pid]['exchange_id'],'market'=>$Daemon->proc[$new_pid]['market'])); 
-                                }
+                            if($DB) {
+                                $DB->close();
+                                $new_pid = $Daemon->newProcess($ch_proc['type'],$ch_proc['type2']);
+                                $DB = DB::init($Daemon->getDBEngine(),$Daemon->getDBCredentials());
+                            }
+                            else {
+                                $new_pid = $Daemon->newProcess($ch_proc['type'],$ch_proc['type2']);
+                            }
+                            //COPY property old process to new
+                            foreach ($Daemon->proc as $j=>$n_proc) {
+                                if($n_proc['pid'] == $new_pid) {
+                                    /*For Order Book workers*/
+                                    if($Daemon->proc[$i]['type'] === 'OrderBook' && $Daemon->proc[$i]['type2'] === 'worker') {
+                                        if(isset($Daemon->proc[$i]['market'])) {
+                                            $Daemon->proc[$j]['market'] = $Daemon->proc[$i]['market'];
+                                        }
+                                        if(isset($Daemon->proc[$i]['exchange_name'])) {
+                                            $Daemon->proc[$j]['exchange_name'] = $Daemon->proc[$i]['exchange_name'];
+                                        }
+                                        if(isset($Daemon->proc[$i]['exchange_id'])) {
+                                            $Daemon->proc[$j]['exchange_id'] = $Daemon->proc[$i]['exchange_id'];
+                                        }
+                                        if(isset($Daemon->proc[$j]['market']) && isset($Daemon->proc[$j]['exchange_id'])) {
+                                            //Send new process info about exchange and market type
+                                            Log::systemLog('debug', 'SEND to ServiceRAM command "create_exchange_orderbook" to order book process = '. $new_pid.' '. json_encode(array('exchange_id'=>$Daemon->proc[$j]['exchange_id'],'market'=>$Daemon->proc[$j]['market'])), $this->proc_name);
+                                            ServiceRAM::write($new_pid,'create_exchange_orderbook', array('exchange_id'=>$Daemon->proc[$j]['exchange_id'],'market'=>$Daemon->proc[$j]['market'])); 
+                                        }
 
-                                if(isset($Daemon->proc[$i]['subscribe'])) {
-                                    $Daemon->proc[$new_pid]['subscribe'] = $Daemon->proc[$i]['subscribe'];
-                                    ServiceRAM::write($new_pid,'active_exchange_pair_orderbook',$Daemon->proc[$new_pid]['subscribe']);
-                                    Log::systemLog('debug', 'SEND to ServiceRAM command "active_exchange_pair_orderbook" to order book process = '. $proc['pid'].' '. json_encode($Daemon->proc[$new_pid]['subscribe']), $this->proc_name);
-                                }
-                                if(isset($Daemon->proc[$i]['subscribe_crc'])) {
-                                    $Daemon->proc[$new_pid]['subscribe_crc'] = $Daemon->proc[$i]['subscribe_crc'];
+                                        if(isset($Daemon->proc[$i]['subscribe'])) {
+                                            $Daemon->proc[$j]['subscribe'] = $Daemon->proc[$i]['subscribe'];
+                                            ServiceRAM::write($new_pid,'active_exchange_pair_orderbook',$Daemon->proc[$j]['subscribe']);
+                                            Log::systemLog('debug', 'SEND to ServiceRAM command "active_exchange_pair_orderbook" to order book process = '. $new_pid.' '. json_encode($Daemon->proc[$j]['subscribe']), $this->proc_name);
+                                        }
+                                        if(isset($Daemon->proc[$i]['subscribe_crc'])) {
+                                            $Daemon->proc[$j]['subscribe_crc'] = $Daemon->proc[$i]['subscribe_crc'];
+                                        }
+                                    }
                                 }
                             }
                             /*****/

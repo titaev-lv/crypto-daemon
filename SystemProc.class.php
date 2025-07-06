@@ -82,6 +82,7 @@ class SystemProc {
     }
     
     public function newProcess($type, $type2) {
+        global $Daemon;
         $new_pid = pcntl_fork();
         if ($new_pid == -1) {
             //Error fork 
@@ -95,7 +96,7 @@ class SystemProc {
             $tmp['type'] = $type;
             $tmp['type2'] = $type2;
             $tmp['timestamp'] = microtime(true)*1E6;
-            $this->proc[] = $tmp;
+            $Daemon->proc[] = $tmp;
             $data['type'] =  $type;
             $data['type2'] =  $type2;
             $data['parent_proc'] = getmypid();
@@ -105,8 +106,8 @@ class SystemProc {
         } 
         else {
             Log::systemLog('debug',"Create new process pid=".getmypid(), "New Process");
-            $this->proc = array();
-            $this->proc_tree = array();
+            $Daemon->proc = array();
+            $Daemon->proc_tree = array();
             switch ($type2) {
                 case 'monitor':
                     switch ($type) {
