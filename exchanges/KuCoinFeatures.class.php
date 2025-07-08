@@ -1,23 +1,14 @@
 <?php
 
 class KuCoinFeatures implements ExchangeInterface {
-    private $exchange_id = 0;
     private $market = 'spot';
-    private $name = '';
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
     private $websoket_conn_id = '';
     
-    private $account_id = 0;
-    private $api_key = '';
-    private $secret_key = '';
-    private $passphrase = '';
-    
     public $lastError = '';
-    
-    public $rest_request_freq = 0.5; //requests per second
-    
+        
     public function __construct($id, $account_id=false, $market='spot') {
         global $DB;
         $this->exchange_id = $id;
@@ -45,18 +36,7 @@ class KuCoinFeatures implements ExchangeInterface {
             }
         }
     }
-    //Get Exchange ID
-    public function getId() {
-        return $this->exchange_id;
-    }
-    //Get Exchange Name
-    public function getName() {
-        return $this->name;
-    }
-    //Get Exchange Account ID
-    public function getAccountId() {
-        return $this->account_id;
-    }
+
     public function getMarket() {
         return $this->market;
     }

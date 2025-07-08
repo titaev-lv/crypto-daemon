@@ -1,10 +1,8 @@
 <?php
-
 /* 
  * Class for manage Exchange Order Book's prosesses
  * 
  */
-
 class OrderBookWorker extends AbstractWorker {
     protected $timer_update_ob_read_ram_subscribes = 500000;
     protected $timer_update_ob_read_ram_subscribes_ts = 0;
@@ -184,7 +182,7 @@ class OrderBookWorker extends AbstractWorker {
                                     break;
                                 case 'ping':
                                     OrderBookRAM::writeDepthRAMupdatePing($this->subscribe);
-                                    //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PING '. json_encode($return), $this->getProcName());
+                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PING '. json_encode($return), $this->getProcName());
                                     $msg = array();
                                     $msg['pong'] = $return['timestamp'];  
                                     $msg_json = json_encode($msg);

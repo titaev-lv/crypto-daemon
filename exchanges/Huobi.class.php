@@ -1,17 +1,7 @@
 <?php
 
-class Huobi {
-    private $exchange_id = 0;
-    private $name = '';
-    
-    private $account_id = 0;
-    private $api_key = '';
-    private $secret_key = '';
-    private $passphrase = '';
-    
+class Huobi  extends AbstractExchange {
     public $lastError = '';
-
-    public $rest_request_freq = 0.5; //requests per second
     
     public function __construct($id, $account_id=false, $market=false) {
         global $DB;
@@ -37,21 +27,7 @@ class Huobi {
             }
         }
     }
-    //Get Exchange ID
-    public function getId() {
-        return $this->exchange_id;
-    }
-    //Get Exchange Name
-    public function getName() {
-        return $this->name;
-    }
-    //Get Exchange Account ID
-    public function getAccountId() {
-        return $this->account_id;
-    }
-    public function getMarket() {
-        return false;
-    }
+    
     private function sign($method,$url,$param=array()) {
         $request_str = $method."\n".preg_replace("/https:\/\//", '', $this->base_url)."\n".$url."\n";
         $param_str = '';
@@ -129,117 +105,7 @@ class Huobi {
         $time = new DateTime("now", new DateTimeZone('UTC'));
         return $time->format('Uu');
     }
-    
-    /*public function syncSpotAllTradePair() {
-        global $DB;
-
-        //1. Get Request
-        $json_data = $this->request($this->base_url.'/v1/settings/common/market-symbols');
-        if(!$json_data) {
-            Log::systemLog('error', 'Error request Market Huobi. Return NULL NOT JSON');                
-            return false;
-        }
-        $data = json_decode($json_data,true);
-        
-        if($data['status'] == 'ok') {
-            if(count($data['data'])>0) {
-                $ins_data = array();
-                //echo "<pre>";
-                //print_r($data['data']);
-                foreach ($data['data'] as $d) {
-                    if($d['state'] == 'online') {
-                        $tmp['base_currency_id'] = Exchange::detectCoinIdByName(strtoupper($d['bc']), $this->exchange_id);
-                        $tmp['quote_currency_id'] = Exchange::detectCoinIdByName($d['qc'], $this->exchange_id);
-                        $tmp['min_order_amount'] = $d['minoa'];
-                        $tmp['min_order_quote_amount'] = $d['minov'];
-                        $exp = (int) $d['pp'];
-                        $tmp['step_price'] = pow(10, (-1) * $exp);
-                        $exp2 = (int) $d['ap'];
-                        $tmp['step_volume'] =  pow(10, (-1) * $exp2);
-                        
-                        $ins_data[] = $tmp;
-                        
-                        /*if(empty($tmp['base_currency_id'])) {
-                            echo $d['bc'].'/'.$d['qc'].' -- '.$tmp['base_currency_id'].'-'.$tmp['quote_currency_id'];
-                            echo "<br>";                
-                        }*/
-                    
-         /*           }
-                }
-                
-                $st = $DB->startTransaction();
-                if($st) {
-                    foreach ($ins_data as $d2) {
-                        if($d2['base_currency_id'] && $d2['quote_currency_id']) {
-                            $base_currency_id = $d2['base_currency_id'];
-                            $quote_currency_id = $d2['quote_currency_id'];
-                            $min_order_amount = $d2['min_order_amount'];
-                            $min_order_quote_amount = $d2['min_order_quote_amount'];
-                            $step_price = $d2['step_price'];
-                            $step_volume = $d2['step_volume'];
-                                                        
-                            $sql = 'INSERT INTO `SPOT_TRADE_PAIR` (`BASE_CURRENCY_ID`,`QUOTE_CURRENCY_ID`,`EXCHANGE_ID`,`MIN_ORDER_AMOUNT`, `MIN_ORDER_QUOTE_AMOUNT`,`STEP_PRICE`,`STEP_VOLUME`) VALUES(?,?,?,?,?,?,?) '
-                                    . 'ON DUPLICATE KEY UPDATE `BASE_CURRENCY_ID`=?,`QUOTE_CURRENCY_ID`=?,`EXCHANGE_ID`=?,`MODIFY_DATE`=NOW(),`MIN_ORDER_AMOUNT`=?,`MIN_ORDER_QUOTE_AMOUNT`=?,`STEP_PRICE`=?,`STEP_VOLUME`=?';
-                            $bind = array();
-                            $bind[0]['type'] = 'i';
-                            $bind[0]['value'] = $base_currency_id;
-                            $bind[1]['type'] = 'i';
-                            $bind[1]['value'] = $quote_currency_id;
-                            $bind[2]['type'] = 'i';
-                            $bind[2]['value'] = $this->exchange_id;
-                            $bind[3]['type'] = 'd';
-                            $bind[3]['value'] = $min_order_amount;
-                            $bind[4]['type'] = 'd';
-                            $bind[4]['value'] = $min_order_quote_amount;
-                            $bind[5]['type'] = 'd';
-                            $bind[5]['value'] = $step_price;
-                            $bind[6]['type'] = 'd';
-                            $bind[6]['value'] = $step_volume;
-                            $bind[7]['type'] = 'i';
-                            $bind[7]['value'] = $base_currency_id;
-                            $bind[8]['type'] = 'i';
-                            $bind[8]['value'] = $quote_currency_id;
-                            $bind[9]['type'] = 'i';
-                            $bind[9]['value'] = $this->exchange_id;
-                            $bind[10]['type'] = 'd';
-                            $bind[10]['value'] = $min_order_amount;
-                            $bind[11]['type'] = 'd';
-                            $bind[11]['value'] = $min_order_quote_amount;
-                            $bind[12]['type'] = 'd';
-                            $bind[12]['value'] = $step_price;
-                            $bind[13]['type'] = 'd';
-                            $bind[13]['value'] = $step_volume;
-
-                            $ins = $DB->insert($sql,$bind);
-                            if(!empty($DB->getLastError())) {
-                                $DB->rollbackTransaction();
-                                Log::systemLog('error', $DB->getLastError());
-                                return false;
-                            }
-                        }
-                    }
-                    $ok = $DB->commitTransaction(); 
-                    
-                    //Delist old pairs
-                    Exchange::delistSpotTradePair(1);
-                    return true;
-                }
-                else {
-                    Log::systemLog('error', 'Error start transaction');
-                    return false;
-                }
-            }
-            else {
-                Log::systemLog('error', 'Error syncSpotAllTradePair() Huobi. Return data is empty');
-                return false;
-            }
-        }
-        else {
-            Log::systemLog('error', 'Error syncSpotAllTradePair() Huobi. Return code='.$data['code']);
-            return false;
-        }
-    }*/
-    
+   
     public function requestSpotTradeFee($pair_id) {
         $pair = Exchange::detectNamesPair($pair_id);
         //Prepare parameters for request
@@ -654,87 +520,6 @@ class Huobi {
             }
             return $ret;
         }
-        return false;
-    }
-    public function webSocketMultiSubsribeDepth($client_ws, $data, $previous=false) {
-        //$previous not need for Huobi
-        $c = $this->getWebSoketCount();
-        if(!empty($data)) {
-            //unsubscribe
-            if($previous !== false) {
-                foreach ($previous as $od) {
-                    $found = false;
-                    foreach ($data as $d) {
-                        if($d['id'] == $od['id']) {
-                            $found = true;
-                        }
-                    }
-                    if($found === false) {
-                        $msg = array();
-                        $c = $this->getWebSoketCount();
-                        $msg['unsub'] = "market.".$od['name'].".mbp.refresh.20";  
-                        $msg['id'] = $c;
-                        $msg_json = json_encode($msg);
-                        $client_ws->text($msg_json);
-                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' unsubscribe msg = '.$msg_json, "Order Book");
-                    }
-                }
-            }
-            //subscribes
-            if(is_array($data)) {
-                foreach ($data as $dd) {
-                    $msg = array();
-                    $c = $this->getWebSoketCount();
-                    $msg['sub'] = "market.".$dd['name'].".mbp.refresh.5";  
-                    $msg['id'] = $c;
-                    $msg_json = json_encode($msg);
-                    $client_ws->text($msg_json);
-                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe msg = '.$msg_json, "Order Book");
-                }
-            }
-            return true;
-        }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
-        return false;
-    }
-    public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
-        $c = $this->getWebSoketCount();
-        if(!empty($data)) {
-            //unsubscribe
-            if($previous !== false) {
-                foreach ($previous as $od) {
-                    $found = false;
-                    foreach ($data as $d) {
-                        if($d['id'] == $od['id']) {
-                            $found = true;
-                        }
-                    }
-                    if($found === false) {
-                        $msg = array();
-                        $c = $this->getWebSoketCount();
-                        $msg['unsub'] = "market.".$od['name'].".bbo";  
-                        $msg['id'] = $c;
-                        $msg_json = json_encode($msg);
-                        $client_ws->text($msg_json);
-                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' unsubscribe BBO msg = '.$msg_json, "Order Book");
-                    }
-                }
-            }
-            //subscribes
-            if(is_array($data)) {
-                foreach ($data as $dd) {
-                    $msg = array();
-                    $c = $this->getWebSoketCount();
-                    $msg['sub'] = "market.".$dd['name'].".bbo";  
-                    $msg['id'] = $c;
-                    $msg_json = json_encode($msg);
-                    $client_ws->text($msg_json);
-                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe BBO msg = '.$msg_json, "Order Book");
-                }
-            }
-            return true;
-        }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
         return false;
     }
 }

@@ -539,8 +539,12 @@ class Trader {
             foreach ($arb_pairs as $ins=>$p) {
                 $sell = $this->fetchObjectPoolTraderInstace($p['sell']);
                 $buy = $this->fetchObjectPoolTraderInstace($p['buy']);
+                
+                $arb_pairs[$ins]['bbo']['timestamp_enable'] = false;
+                $arb_pairs[$ins]['bbo']['volume_enable'] = false;
+                $arb_pairs[$ins]['bbo']['enable'] = false;
   
-                if(isset($sell->bbo['bid_price']) && !empty($sell->bbo['bid_price']) && isset($buy->bbo['bid_price']) && !empty($buy->bbo['bid_price'])) {
+                if(isset($sell->bbo['bid_price']) && !empty($sell->bbo['bid_price']) && isset($buy->bbo['ask_price']) && !empty($buy->bbo['ask_price'])) {
                     //BBO is true. Use only best price
                     $sell_price =  number_format($sell->bbo['bid_price'], 12, '.','');
                     $buy_price = number_format($buy->bbo['ask_price'], 12, '.','');
@@ -558,22 +562,13 @@ class Trader {
                     if(isset($sell->bbo['timestamp']) && isset($buy->bbo['timestamp'])) {
                         $bbo_ts_sell = microtime(true) - (float)$sell->bbo['timestamp']*1E-6;
                         $bbo_ts_buy = microtime(true) - (float)$buy->bbo['timestamp']*1E-6;
-                        if($bbo_ts_sell < $this->timestamp_limit && $bbo_ts_buy < $this->timestamp_limit) {
-                            $arb_pairs[$ins]['bbo']['timestamp_enable'] = true;
-                        }
-                        else {
-                            $arb_pairs[$ins]['bbo']['timestamp_enable'] = false;
-                            Log::systemLog('debug', 'timestamp BBO is exceed limit', "Trader"); 
-                        }
+                        //limit delay timestamp BBO
                         $arb_pairs[$ins]['bbo']['timestamp_enable'] = ($bbo_ts_sell < $this->timestamp_limit && $bbo_ts_buy < $this->timestamp_limit) ? true : false;
                     }
-                    else {
-                        $arb_pairs[$ins]['bbo']['timestamp_enable'] = false;
-                        Log::systemLog('warn', 'timestamp BBO is empty', "Trader"); 
-                    }
-                    //volume enable
+                    //minimum exchange base and quote currency volume
+                    $min_vol_q_sell = bcmul($volume_nf, (string) $sell->min_order_quote_amount);
+                    $min_vol_q_buy = bcmul($volume_nf, (string) $buy->min_order_quote_amount);
                     
-                    //
                 }
                 else {
                     Log::systemLog('warn', 'FAILED read bbo price from object to calc profit', "Trader"); 
@@ -589,9 +584,9 @@ class Trader {
                 }
 
                 
-                if($delta > 0) {
+               /* if($delta > 0) {
                     Log::systemLog('warn', 'CALC ALANYZE PAIRS'. json_encode($p).' sell='.$sell_price.' ('.$sell->exchange_name.')   buy='.$buy_price .'('.$buy->exchange_name.') profit='.$delta.' volume='.$volume, "Trader"); 
-                }
+                }*/
 
 
                 /*if($this->fin_protection) {

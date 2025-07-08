@@ -1,23 +1,13 @@
 <?php
 
 class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
-    private $exchange_id = 0;
     private $market = 'spot';
-    private $name = '';
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
     private $websoket_conn_id = '';
-    
-    private $account_id = 0;
-    private $api_key = '';
-    private $passphrase = '';
-    private $secret_key = '';
-    private $timestamp = 0;
-    
-    public $lastError = '';
 
-    public $rest_request_freq = 0.5; //requests per second
+    public $lastError = '';
     
     public function __construct($id, $account_id=false, $market='spot') {
         global $DB;
@@ -45,21 +35,6 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
                 $this->account_id = $account_id;
             }
         }
-    }
-
-    //Get Exchange ID
-    public function getId() {
-        return $this->exchange_id;
-    }
-
-    //Get Exchange Name
-    public function getName() {
-        return $this->name;
-    }
-
-    //Get Exchange Account ID
-    public function getAccountId() {
-        return $this->account_id;
     }
 
     public function getMarket() {
@@ -658,6 +633,7 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
         return false;
     }
     public function webSocketMultiSubsribeDepth($client_ws, $data, $previous=false) {
+        global $Daemon;
         $c = $this->getWebSoketCount();
         if(!empty($data)) {
             //unsubscribe
@@ -684,7 +660,7 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
 
                 if(!empty($tiker)) {
                     $msg_json = json_encode($msg);
-                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, "Order Book");
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, $Daemon->getProcName());
                     $client_ws->text($msg_json);
                 }
             }
@@ -694,7 +670,7 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
             $msg['method'] = "depth.subscribe";           
             if(is_array($data)) {
                 foreach ($data as $dd) {
-                    $tmp = array($dd['name'], 20, "0", false);
+                    $tmp = array($dd['name'], 5, "0", false);
                     $params[] = $tmp;
                 }
             }
@@ -702,18 +678,19 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
             $msg['id'] = $c;           
             $msg_json = json_encode($msg);
             if(empty($params)) {
-                Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data is empty', "Order Book");
+                Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data is empty', $Daemon->getProcName());
                 return false;
             }
             
             $client_ws->text($msg_json);
-            Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe msg='.$msg_json, "Order Book");
+            Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe msg='.$msg_json, $Daemon->getProcName());
             return true;
         }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', $Daemon->getProcName());
         return false;
     }
     public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
+        global $Daemon;
         $c = $this->getWebSoketCount();
         if(!empty($data)) {
             //unsubscribe
@@ -740,7 +717,7 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
 
                 if(!empty($tiker)) {
                     $msg_json = json_encode($msg);
-                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe BBO MSG '.$msg_json, "Order Book");
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe BBO MSG '.$msg_json, $Daemon->getProcName());
                     $client_ws->text($msg_json);
                 }
             }
@@ -758,15 +735,15 @@ class CoinExSpot extends CoinEx implements ExchangeTradeInterface {
             $msg['id'] = $c;           
             $msg_json = json_encode($msg);
             if(empty($params)) {
-                Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data BBO is empty', "Order Book");
+                Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data BBO is empty', $Daemon->getProcName());
                 return false;
             }
             
             $client_ws->text($msg_json);
-            Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe BBO msg='.$msg_json, "Order Book");
+            Log::systemLog('debug', 'Echange order book process = '. getmypid().' subscribe BBO msg='.$msg_json, $Daemon->getProcName());
             return true;
         }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', $Daemon->getProcName());
         return false;
     }
     public function restMarketDepth ($symbol, $limit= 5, $interval="0") {

@@ -1,22 +1,13 @@
 <?php
 
 class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
-    private $exchange_id = 0;
     private $market = 'spot';
-    private $name = '';
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
     private $websoket_conn_id = '';
     
-    private $account_id = 0;
-    private $api_key = '';
-    private $secret_key = '';
-    private $passphrase = '';
-    
     public $lastError = '';
-    
-    public $rest_request_freq = 0.5; //requests per second
     
     public function __construct($id, $account_id=false, $market='spot') {
         global $DB;
@@ -45,18 +36,7 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
             }
         }
     }
-    //Get Exchange ID
-    public function getId() {
-        return $this->exchange_id;
-    }
-    //Get Exchange Name
-    public function getName() {
-        return $this->name;
-    }
-    //Get Exchange Account ID
-    public function getAccountId() {
-        return $this->account_id;
-    }
+
     public function getMarket() {
         return $this->market;
     }
@@ -871,6 +851,7 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
         return false;
     }
     public function webSocketMultiSubsribeDepth($client_ws, $data, $previous=false) {
+        global $Daemon;
         $c = $this->getWebSoketCount();
         $msg = array();
         if(!empty($data)) {
@@ -903,7 +884,7 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
                 $msg['response'] = true;
                 if($found_somthing == true) {
                     $msg_json = json_encode($msg);
-                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, "Order Book");
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, $Daemon->getProcName());
                     $client_ws->text($msg_json);
                 }
             }
@@ -926,14 +907,15 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
             $msg['privateChannel'] = false;
             $msg['response'] = true;
             $msg_json = json_encode($msg);
-            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe MSG '.$msg_json, "Order Book");
+            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe MSG '.$msg_json, $Daemon->getProcName());
             $client_ws->text($msg_json);
             return true;
         }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', $Daemon->getProcName());
         return false;
     }
     public function webSocketMultiSubsribeDepth5($client_ws, $data, $previous=false) {
+        global $Daemon;
         $c = $this->getWebSoketCount();
         $msg = array();
         if(!empty($data)) {
@@ -966,7 +948,7 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
                 $msg['response'] = true;
                 if($found_somthing == true) {
                     $msg_json = json_encode($msg);
-                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, "Order Book");
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe MSG '.$msg_json, $Daemon->getProcName());
                     $client_ws->text($msg_json);
                 }
             }
@@ -989,14 +971,15 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
             $msg['privateChannel'] = false;
             $msg['response'] = true;
             $msg_json = json_encode($msg);
-            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe MSG '.$msg_json, "Order Book");
+            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe MSG '.$msg_json, $Daemon->getProcName());
             $client_ws->text($msg_json);
             return true;
         }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', "Order Book");
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe data error', $Daemon->getProcName());
         return false;
     }
     public function webSocketMultiSubsribeBBO($client_ws, $data, $previous=false) {
+        global $Daemon;
         $c = $this->getWebSoketCount();
         $msg = array();
         if(!empty($data)) {
@@ -1029,7 +1012,7 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
                 $msg['response'] = true;
                 if($found_somthing == true) {
                     $msg_json = json_encode($msg);
-                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe BBO MSG '.$msg_json, "Order Book");
+                    Log::systemLog('debug', 'Child Order Book proc='. getmypid().' unsubscribe BBO MSG '.$msg_json, $Daemon->getProcName());
                     $client_ws->text($msg_json);
                 }
             }
@@ -1052,11 +1035,11 @@ class KuCoinSpot extends KuCoin implements ExchangeTradeInterface {
             $msg['privateChannel'] = false;
             $msg['response'] = true;
             $msg_json = json_encode($msg);
-            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe BBO MSG '.$msg_json, "Order Book");
+            Log::systemLog('debug', 'Child Order Book proc='. getmypid().' subscribe BBO MSG '.$msg_json, $Daemon->getProcName());
             $client_ws->text($msg_json);
             return true;
         }
-        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', "Order Book");
+        Log::systemLog('error', 'Echange order book process = '. getmypid().' Subscribe BBO data error', $Daemon->getProcName());
         return false;
     }
     public function restMarketDepth ($symbol, $limit=5, $merge="0") {

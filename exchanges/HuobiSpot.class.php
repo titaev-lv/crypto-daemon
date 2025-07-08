@@ -1,22 +1,13 @@
 <?php
 
 class HuobiSpot extends Huobi implements ExchangeTradeInterface {
-    private $exchange_id = 0;
     private $market = 'spot';
-    private $name = '';
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
     private $websoket_conn_id = '';
     
-    private $account_id = 0;
-    private $api_key = '';
-    private $secret_key = '';
-    private $passphrase = '';
-    
     public $lastError = '';
-
-    public $rest_request_freq = 0.5; //requests per second
     
     public function __construct($id, $account_id=false, $market='spot') {
         global $DB;
@@ -45,18 +36,7 @@ class HuobiSpot extends Huobi implements ExchangeTradeInterface {
             }
         }
     }
-    //Get Exchange ID
-    public function getId() {
-        return $this->exchange_id;
-    }
-    //Get Exchange Name
-    public function getName() {
-        return $this->name;
-    }
-    //Get Exchange Account ID
-    public function getAccountId() {
-        return $this->account_id;
-    }
+
     public function getMarket() {
         return $this->market;
     }
@@ -693,7 +673,7 @@ class HuobiSpot extends Huobi implements ExchangeTradeInterface {
                     if($found === false) {
                         $msg = array();
                         $c = $this->getWebSoketCount();
-                        $msg['unsub'] = "market.".$od['name'].".mbp.refresh.20";  
+                        $msg['unsub'] = "market.".$od['name'].".mbp.refresh.5";  
                         $msg['id'] = $c;
                         $msg_json = json_encode($msg);
                         $client_ws->text($msg_json);

@@ -11,6 +11,7 @@ require_once __DIR__.'/SystemProc.class.php';
 require_once __DIR__.'/abstract/AbstractProc.class.php';
 require_once __DIR__.'/abstract/AbstractMonitor.class.php';
 require_once __DIR__.'/abstract/AbstractWorker.class.php';
+require_once __DIR__.'/abstract/AbstractExchange.class.php';
 
 //Interfaces
 require_once __DIR__.'/interfaces/DbInterface.php';

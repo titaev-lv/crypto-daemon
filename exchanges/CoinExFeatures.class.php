@@ -1,20 +1,12 @@
 <?php
 
 class CoinExFeatures implements ExchangeInterface {
-    private $exchange_id = 0;
     private $market = 'spot';
-    private $name = '';
     private $base_url = '';
     private $websocket_url = '';
     private $websoket_count = 1;
     private $websoket_conn_id = '';
-    
-    private $account_id = 0;
-    private $api_key = '';
-    private $passphrase = '';
-    private $secret_key = '';
-    private $timestamp = 0;
-    
+
     public $lastError = '';
 
     public $rest_request_freq = 0.5; //requests per second
