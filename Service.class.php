@@ -1,20 +1,33 @@
 <?php
 
-class Service {
+class Service extends AbstractWorker {
+    public $timer_sync_trade_pairs = 60*1E6;
+    public $timer_sync_trade_pairs_ts = 0;
+    public $timer_sync_fees_active_trade_pairs = 30*1E6;
+    public $timer_sync_fees_active_trade_pairs_ts = 0;
+    public $timer_sync_coin_data = 45*1E6;
+    public $timer_sync_coin_data_ts = 0;
     
-    private $timer_sync_trade_pairs = 60*1E6;
-    private $timer_sync_fees_active_trade_pairs = 30*1E6;
-    private $timer_sync_trade_pairs_ts = 0;
-    private $timer_sync_fees_active_trade_pairs_ts = 0;
-    private $timer_sync_coin_data = 45*1E6;
-    private $timer_sync_coin_data_ts = 0;
+    
+    public function processing() {
+    
+        $this->syncTradePair();
+            
+        //sync active pair's fee from all exchanges 
+        //$service->syncFeesActivePairs();
+            
+        //sync coins from all exchanges (deposit, withdrawal)
+        //$service->syncCoins();
+            
+        usleep(1000000);
+    }
+    
+    
     
     public function syncTradePair() {
-        global $DB;
-        
+        global $DB;       
         //UPDATE TRADE PAIRS FROM EXCHANGES
-        if(ctdaemon::checkTimer($this->timer_sync_trade_pairs, $this->timer_sync_trade_pairs_ts)) {
-            $this->timer_sync_trade_pairs_ts = microtime(true)*1E6;
+        if($this->probeTimer("timer_sync_trade_pairs") === true) { 
             //Log::systemLog('debug', 'Sync pairs TIMER');
             //Check need update from DB
             $sql = "SELECT 
@@ -45,7 +58,7 @@ class Service {
             
             if(is_array($exchanges) && !empty($exchanges)) {
                 foreach ($exchanges as $exch) {
-                    $exch_obj = Exchange::init($exch['EXCHANGE_ID']);
+                    $exch_obj = Exchange::init($exch['EXCHANGE_ID'], false, 'spot');
                     if($exch_obj->getId() < 1) {
                         Log::systemLog('error', 'Error create Exchange object at Sync spot trade pairs', "Service");
                     }

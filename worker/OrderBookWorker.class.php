@@ -26,6 +26,8 @@ class OrderBookWorker extends AbstractWorker {
     public function processing() {
         global $Daemon, $DB;
         
+        $re_subscribe = false;
+        
         if(!isset($this->exchange_id)) {
             $this->initExchange();
         }
@@ -56,21 +58,27 @@ class OrderBookWorker extends AbstractWorker {
                 }
                 if($ws) {
                     $this->ws = $ws;
-                    $this->subscribe = '';
                     $this->subscribe_crc = '';
-                    sleep(1);
+                    $this->timer_update_ob_read_ram_subscribes_ts = 0;
+                    $re_subscribe = true;
                 }
             }
         }
          
         if($this->probeTimer("timer_update_ob_read_ram_subscribes") === true) {
             $pairs_arr = ServiceRAM::read('active_exchange_pair_orderbook');
-            if(!empty($pairs_arr)) {
-                //Need only newest data
-                $pairs = $pairs_arr[0];
+            if(!empty($pairs_arr) || $re_subscribe) {
+                if(!empty($pairs_arr)) {
+                    //Need only newest data
+                    $pairs = $pairs_arr[0];
+                    $tasks = $pairs['data'];
+                }
+                else {
+                    $tasks = $this->subscribe;
+                    $this->subscribe = '';
+                }
+                
                 Log::systemLog('debug', 'Order Book Worker pid='. getmypid().' '.$this->exchange_name.' received = '.json_encode($pairs),$this->getProcName());
-
-                $tasks = $pairs['data'];
                 $subscribe_crc32 = crc32(json_encode($tasks));
                 
                 $previous_subscribe = false;
@@ -112,7 +120,7 @@ class OrderBookWorker extends AbstractWorker {
             if($this->exchangeObj->isNeedPingWebsocket()) {
                 if($this->probeTimer("timer_update_ob_ping") === true) {
                     $this->exchangeObj->webSocketPing($this->ws);
-                    Log::systemLog('debug', 'Order Book Worker proc='. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' send PING', $this->getProcName());
+                    //Log::systemLog('debug', 'Order Book Worker proc='. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' send PING', $this->getProcName());
                 }
             }
             //control timeout and false receive
@@ -154,7 +162,7 @@ class OrderBookWorker extends AbstractWorker {
                                     if($found_sunscribe === true) {
                                         $return_merge = $this->exchangeObj->mergeTradePairData($return,$this->subscribe);
                                         OrderBookRAM::writeDepthRAM($return_merge, $this->subscribe);
-                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse DEPTH '. json_encode($return_merge), $this->getProcName());                                                     
+                                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse DEPTH '. json_encode($return_merge), $this->getProcName());                                                     
                                     }
                                     break;
                                 case 'bbo':
@@ -172,22 +180,22 @@ class OrderBookWorker extends AbstractWorker {
                                     if($found_sunscribe === true) {
                                         $return_merge = $this->exchangeObj->mergeTradePairData($return, $this->subscribe);
                                         OrderBookRAM::writeBBORAM($return_merge);
-                                        Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse BBO '. json_encode($return_merge), $this->getProcName());  
+                                        //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse BBO '. json_encode($return_merge), $this->getProcName());  
                                     }
                                     break;
                                 case 'pong':
                                     //update all pair timestamp
                                     OrderBookRAM::writeDepthRAMupdatePong($this->subscribe);
-                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PONG '. json_encode($return), $this->getProcName());
+                                    //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PONG '. json_encode($return), $this->getProcName());
                                     break;
                                 case 'ping':
                                     OrderBookRAM::writeDepthRAMupdatePing($this->subscribe);
-                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PING '. json_encode($return), $this->getProcName());
+                                   // Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Receive parse PING '. json_encode($return), $this->getProcName());
                                     $msg = array();
                                     $msg['pong'] = $return['timestamp'];  
                                     $msg_json = json_encode($msg);
                                     $this->ws->text($msg_json);
-                                    Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Response PONG '. $msg_json, $this->getProcName());
+                                    //Log::systemLog('debug', 'Echange order book process = '. getmypid().' '.$this->exchange_name.' '. strtoupper($this->market).' webSoket Response PONG '. $msg_json, $this->getProcName());
                                     break;
                                 case 'error':
                                     $need_reconnect = true;

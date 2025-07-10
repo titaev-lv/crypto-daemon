@@ -16,7 +16,7 @@ class SystemProc {
     private string $db_engine;
     private array $db_credentials;
     
-    public int $timeout_child = 15000000;
+    public int $timeout_child = 11000000;
     
     //Timers
     /*public int $timer_update_tree = 200000; // 0.2sec
@@ -121,6 +121,12 @@ class SystemProc {
                     switch ($type) {
                         case 'OrderBook':
                             $OrgerBookWorker = new OrderBookWorker();
+                            break;
+                        case 'PriceLog':
+                            $PLog = new PriceLog();
+                            break;
+                        case 'Service':
+                            $serv = new Service();
                             break;
                         default:
                     }

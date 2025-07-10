@@ -110,6 +110,8 @@ if ($pid == -1) {
        
     //Start process Monitor for manage exchanges order book
     $Daemon->newProcess('OrderBook','monitor');
+    $Daemon->newProcess('PriceLog', 'worker');
+    $Daemon->newProcess('Service', 'worker');
  
     $Main = new ctdaemon();
     $Main->setProcName($Daemon->getProcName());

@@ -411,6 +411,43 @@ class OrderBookRAM {
         }
     }
     
+    public static function readDepthRAM($hash) {
+        $id = self::getTok($hash);
+        //$start1 = microtime(true);
+        //set semaphore
+        $semId = sem_get($id);
+        sem_acquire($semId);
+        //read segment
+        $shmId = shm_attach($id);
+        $var = 1;
+        $data = '';
+        $ret_data = array();
+        if(shm_has_var($shmId, $var)) {
+            //get data
+            $data = shm_get_var($shmId, $var);
+        } 
+        else {
+            shm_detach($shmId);
+            sem_release($semId);
+            return false;
+        }
+        shm_detach($shmId);
+        sem_release($semId);
+        //$time1 = microtime(true) - $start1;
+        //Log::systemLog('debug', 'READ TIME Order Book ONLY RAM '.$time1.'s');
+        //
+        if(!empty($data)) {
+            $data_arr = json_decode($data,JSON_OBJECT_AS_ARRAY);
+        }
+        else {
+            return false;
+        }
+          
+        //$time = microtime(true) - $start;
+        //Log::systemLog('debug', 'READ TIME Order Book RAM '.$time.'s');
+        return $data_arr; 
+    }
+    
     private static function getTok($crc) {
         global $Daemon;
         $path = $Daemon->root_dir."/ftok/".$crc.".ftok";
