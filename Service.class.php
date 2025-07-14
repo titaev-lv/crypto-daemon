@@ -12,12 +12,8 @@ class Service extends AbstractWorker {
     public function processing() {
     
         $this->syncTradePair();
-            
-        //sync active pair's fee from all exchanges 
-        //$service->syncFeesActivePairs();
-            
-        //sync coins from all exchanges (deposit, withdrawal)
-        //$service->syncCoins();
+        $this->syncFeesActivePairs();
+        $this->syncCoins();
             
         usleep(1000000);
     }
@@ -25,7 +21,7 @@ class Service extends AbstractWorker {
     
     
     public function syncTradePair() {
-        global $DB;       
+        global $Daemon, $DB;       
         //UPDATE TRADE PAIRS FROM EXCHANGES
         if($this->probeTimer("timer_sync_trade_pairs") === true) { 
             //Log::systemLog('debug', 'Sync pairs TIMER');
@@ -60,12 +56,12 @@ class Service extends AbstractWorker {
                 foreach ($exchanges as $exch) {
                     $exch_obj = Exchange::init($exch['EXCHANGE_ID'], false, 'spot');
                     if($exch_obj->getId() < 1) {
-                        Log::systemLog('error', 'Error create Exchange object at Sync spot trade pairs', "Service");
+                        Log::systemLog('error', 'Error create Exchange object at Sync spot trade pairs', $Daemon->getProcName());
                     }
                     else {
                         $status_sync_pair = $exch_obj->syncSpotAllTradePair();
                         if($status_sync_pair) {
-                            Log::systemLog('debug', 'Exchange\'s trade pairs '.$exch_obj->getName().' is syncronised', "Service");
+                            Log::systemLog('debug', 'Exchange\'s trade pairs '.$exch_obj->getName().' is syncronised', $Daemon->getProcName());
                         }
                     }
                     unset($exch_obj);
@@ -76,12 +72,10 @@ class Service extends AbstractWorker {
     }    
     
     public function syncFeesActivePairs() {
-        global $DB;
+        global $Daemon, $DB;
         //UPDATE FEES
-        if(ctdaemon::checkTimer($this->timer_sync_fees_active_trade_pairs, $this->timer_sync_fees_active_trade_pairs_ts)) {
-            $this->timer_sync_fees_active_trade_pairs_ts = microtime(true)*1E6;
+        if($this->probeTimer("timer_sync_fees_active_trade_pairs") === true) { 
             //Log::systemLog('debug', 'Sync fee TIMER');
-            
             //Check need update from DB
             $sql = "WITH
                         account AS (
@@ -207,11 +201,11 @@ class Service extends AbstractWorker {
                 $last_ex = false;
                 foreach ($list as $l) {
                     if(!$last_ex) {
-                        $exchange = Exchange::init($l['EX_ID'], $l['EA_ID']);
+                        $exchange = Exchange::init($l['EX_ID'], $l['EA_ID'], 'spot');
                     }
                     elseif ($last_ex !== $l['EX_ID']) {
                         unset($exchange);
-                        $exchange = Exchange::init($l['EX_ID'], $l['EA_ID']);
+                        $exchange = Exchange::init($l['EX_ID'], $l['EA_ID'], 'spot');
                     }
                     $fee = $exchange->requestSpotTradeFee($l['PAIR_ID']);                    
                     //Log::systemLog('debug', "Exchange ".$l['EX_ID'].' pair='.$l['PAIR_ID'].' '.json_encode($fee));
@@ -233,10 +227,10 @@ class Service extends AbstractWorker {
                         $bind[5]['value'] = $fee['maker_fee'];
                         $ins = $DB->insert($sql, $bind);
                         if(!empty($DB->getLastError())) {
-                            Log::systemLog("error", 'Error insert trade pair FEE Exchange='.$l['EX_ID'].' Account_id='.$l['EA_ID'], "Service");
+                            Log::systemLog("error", 'Error insert trade pair FEE Exchange='.$l['EX_ID'].' Account_id='.$l['EA_ID'], $Daemon->getProcName());
                         }
                         else {
-                            Log::systemLog("debug", 'Trade pair\'s Fee Exchange='.$exchange->getName().' Account_id='.$l['EA_ID'].' Pair='.Exchange::detectNamesPair($l['PAIR_ID']) .' is updated', "Service");
+                            Log::systemLog("debug", 'Trade pair\'s Fee Exchange='.$exchange->getName().' Account_id='.$l['EA_ID'].' Pair='.Exchange::detectNamesPair($l['PAIR_ID']) .' is updated', $Daemon->getProcName());
                         }
                     }
                     $last_ex = $l['EX_ID'];
@@ -247,11 +241,10 @@ class Service extends AbstractWorker {
     }
 
     public function syncCoins() {
-        global $DB;
+        global $Daemon, $DB;
         //UPDATE COINS FROM EXCHANGES
         //Sync Coin data (deposit, withdraw)
-        if(ctdaemon::checkTimer($this->timer_sync_coin_data, $this->timer_sync_coin_data_ts)) {
-            $this->timer_sync_coin_data_ts = microtime(true)*1E6;
+        if($this->probeTimer("timer_sync_coin_data") === true) { 
             //SELECT trade pairs and monitor, detect coins
             /*$sql = "WITH
                         active_coin AS (
@@ -364,16 +357,16 @@ class Service extends AbstractWorker {
             $exch_update = $DB->select($sql);
             if(is_array($exch_update) && !empty($exch_update)) {
                 foreach ($exch_update as $eu) {
-                    $exchange = Exchange::init($eu['EXCHANGE_ID']);
+                    $exchange = Exchange::init($eu['EXCHANGE_ID'],false, 'spot');
                     $result = $exchange->updateCoinsInfoData();
-                    Log::systemLog("debug", "Echange ".$exchange->getName()." update coins info is finished", "Service");
+                    Log::systemLog("debug", "Echange ".$exchange->getName()." update coins info is finished", $Daemon->getProcName());
                     unset($exchange);
                 }
                 $sql = "UPDATE `UPDATE_STATUS` SET `DATE_UPDATE`=NOW() WHERE `COMPONENT`='interval_update_spot_coin'";
                 $upd = $DB->update($sql);
                 if(!$upd && !empty($DB->getLastError())) {
                     $DB->rollbackTransaction();
-                    Log::systemLog('error', $DB->getLastError(), "Service");
+                    Log::systemLog('error', $DB->getLastError(), $Daemon->getProcName());
                 }
             }
         }

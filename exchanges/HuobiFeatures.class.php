@@ -104,8 +104,7 @@ class HuobiFeatures implements ExchangeInterface {
             return $result;
         }
         else {
-            Log::systemLog('error', 'Error request from '.$this->name.' exchange. Error code. '.$http_code);
-            $this->lastError = 'Error request from '.$this->name.' exchange. Error code. '.$http_code;
+            Log::systemLog('error', 'Error request from '.$this->name.' exchange. Error code. '.$http_code. ' url='.$url.' param='.$param,$Daemon->getProcName());
             return false;
         }
     }

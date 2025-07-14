@@ -56,6 +56,7 @@ class Huobi  extends AbstractExchange {
         return $signature;
     }
     private function request($url,$param=false,$method = 'GET', $header = array()) {
+        global $Daemon;
         $ch = curl_init();
         curl_setopt ($ch,  CURLOPT_SSLVERSION, 6);
         if($method == 'GET') {
@@ -92,8 +93,7 @@ class Huobi  extends AbstractExchange {
             return $result;
         }
         else {
-            Log::systemLog('error', 'Error request from '.$this->name.' exchange. Error code. '.$http_code);
-            $this->lastError = 'Error request from '.$this->name.' exchange. Error code. '.$http_code;
+            Log::systemLog('error', 'Error request from '.$this->name.' exchange. Error code. '.$http_code. ' url='.$url.' param='.$param,$Daemon->getProcName());
             return false;
         }
     }

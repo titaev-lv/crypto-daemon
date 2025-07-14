@@ -345,32 +345,7 @@ class ctdaemon extends AbstractProc {
         }
         
     }
-    private function runProcService() {
-        global $DB;
-        Log::systemLog('info',"Process type \"Service\" STARTED pid=".getmypid(), "Service");    
-        
-        $DB = DB::init($this->getDBEngine(),$this->getDBCredentials());
-        
-        $service = new Service();
-        
-        while(1) {
-            $this->timestamp = microtime(true)*1E6;
-            
-            $this->updateProcTree();
-            //Log::systemLog('debug', 'PROC TREE '. json_encode($this->proc_tree).' proc='. getmypid());
-            
-            //Sync trade pairs from all active exchanges
-            $service->syncTradePair();
-            
-            //sync active pair's fee from all exchanges 
-            $service->syncFeesActivePairs();
-            
-            //sync coins from all exchanges (deposit, withdrawal)
-            $service->syncCoins();
-            
-            usleep(1000000);
-        }
-    }   
+   
     private function runProcTradeWorkerMonitor() {
         global $DB;
         //Create DB connection
